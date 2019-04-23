@@ -443,11 +443,16 @@ const createManifest = async function(srcLines,
 const userscriptEntrypoint = function(doc) {
 	dbg && runUnittests(unittests);
 
-	if (!(doc instanceof HTMLDocument) ||
-		!isGalleryUrl(tryParseHref(doc.location.href)))
+	let url = tryParseHref(doc.location.href);
+	if (!(doc instanceof HTMLDocument) || !isGalleryUrl(url))
 	{
 		logInfo(`document does not appear to be a gallery; aborting`);
-		return;};
+		return;
+	} else {
+		let d = getDomain({origin : url.origin});
+		logInfo(`document appears to be a gallery`,
+			`(domain: ${d.name}, kind: ${d.kind}, subkind: ${d.subkind})`);
+	};
 
 	enforce([`interactive`, `complete`].includes(doc.readyState),
 		`document not loaded`);
@@ -486,16 +491,6 @@ const onKeyDownGlobal = function(ev) {
 
 /* -------------------------------------------------------------------------- */
 
-/*
-	state : {
-		origin : `protocol://hostname:port`,
-		domain : string, // todo: remove (redundant)
-		searchExpr : string,
-		currentPostId : int,
-		scaleMode : `fit` / `full`,
-	}
-*/
-
 const namespace = `inline-gallery`;
 
 const qual = function(n) {
@@ -503,24 +498,22 @@ const qual = function(n) {
 };
 
 const hostnameDomainTbl = {
-	[`danbooru.donmai.us`] : `danbooru`,
-	[`gelbooru.com`] : `gelbooru`,
-	[`e621.net`] : `e621`,
-	[`realbooru.com`] : `realbooru`,
-	[`rule34.xxx`] : `r34xxx`,
-	[`safebooru.org`] : `safebooru`,
-	[`testbooru.donmai.us`] : `danbooru`,
-	[`yande.re`] : `yandere`,
-};
-
-const domainKindTbl = {
-	danbooru : `danbooru`,
-	e621 : `danbooru`,
-	gelbooru : `gelbooru`,
-	r34xxx : `gelbooru`,
-	realbooru : `gelbooru`,
-	safebooru : `gelbooru`,
-	yandere : `danbooru`, /* moebooru */
+	[`danbooru.donmai.us`] : {
+		kind : `danbooru`, subkind : `danbooru`, name : `danbooru`},
+	[`gelbooru.com`] : {
+		kind : `gelbooru`, name : `gelbooru`},
+	[`e621.net`] : {
+		kind : `danbooru`, subkind : `e621`, name : `e621`},
+	[`realbooru.com`] : {
+		kind : `gelbooru`, name : `realbooru`},
+	[`rule34.xxx`] : {
+		kind : `gelbooru`, name : `r34xxx`},
+	[`safebooru.org`] : {
+		kind : `gelbooru`, name : `safebooru`},
+	[`testbooru.donmai.us`] : {
+		kind : `danbooru`, subkind : `danbooru`, name : `danbooru`},
+	[`yande.re`] : {
+		kind : `danbooru`, subkind : `moebooru`, name : `yandere`},
 };
 
 const applyToDocument = function(doc) {
@@ -537,7 +530,7 @@ const applyToDocument = function(doc) {
 		return;};
 
 	ensureApplyGlobalStyleRules(state, doc,
-		() => getGlobalStyleRules(state.domain));
+		() => getGlobalStyleRules(getDomain(state)));
 
 	let viewParent = getInlineViewParent(state, doc);
 	let view = getInlineView(state, viewParent);
@@ -561,7 +554,7 @@ const applyToDocument = function(doc) {
 	} else {
 		logError(`failed to find thumbnail list element`);};
 
-	if (state.domain === `danbooru`) {
+	if (getDomain(state).name === `danbooru`) {
 		ensureForwardDanbooruTooltipEvents(state, doc);};
 };
 
@@ -857,7 +850,9 @@ const primeNavigationButton = async function(state, doc, btn, direction) {
 };
 
 const bindThumbnailsList = function(state, doc, scopeElem) {
-	let thumbs = scopeElem.getElementsByClassName(getThumbClass(state.domain));
+	let thumbs = scopeElem.getElementsByClassName(
+		getThumbClass(getDomain(state)));
+
 	log(`binding ${thumbs.length} thumbnail elements …`);
 	for (let thumb of thumbs) {
 		bindThumbnail(state, doc, thumb);};
@@ -949,7 +944,7 @@ const getThumbnailsListElem = function(state, doc) {
 		return null;};
 
 	let firstThumb = elem.getElementsByClassName(
-		getThumbClass(state.domain)).item(0);
+		getThumbClass(getDomain(state))).item(0);
 	if (firstThumb === null) {
 		return null;};
 
@@ -1009,7 +1004,7 @@ const searchExprContainsOrderTerm = function(state, searchExpr) {
 	if (searchExpr === undefined) {
 		return false;};
 
-	let orderPrefix = domainKindOrderTermPrefixTbl[getDomainKind(state)];
+	let orderPrefix = domainKindOrderTermPrefixTbl[getDomain(state).kind];
 	if (orderPrefix === undefined) {
 		return false;};
 
@@ -1027,20 +1022,10 @@ const searchExprContainsOrderTerm = function(state, searchExpr) {
 	return false;
 };
 
-const getDomainKind = function({domain}) {
-	dbg && assert(typeof domain === `string`);
+const getThumbClass = function({name}) {
+	dbg && assert(typeof name === `string`);
 
-	let k = domainKindTbl[domain];
-	dbg && assert(typeof k === `string`,
-		`domainKind not defined for domain ${domain}`);
-
-	return k;
-};
-
-const getThumbClass = function(domain) {
-	dbg && assert(typeof domain === `string`);
-
-	return domain === `danbooru`
+	return name === `danbooru`
 		? `post-preview`
 		: `thumb`;
 };
@@ -1139,7 +1124,7 @@ const tryGetPostInfo = async function(state, postId) {
 		reportInvalidResponse(requUrl.href, resp);
 		return null;};
 
-	switch (getDomainKind(state)) {
+	switch (getDomain(state).kind) {
 		case `danbooru` :
 			let respObj = tryParseJson(resp.responseText);
 			try {
@@ -1196,7 +1181,7 @@ const tryGetPostNotes = async function(state, postId) {
 		return null;};
 
 	notes = null;
-	switch (getDomainKind(state)) {
+	switch (getDomain(state).kind) {
 		case `danbooru` :
 			let respObj = tryParseJson(resp.responseText);
 			try {
@@ -1263,7 +1248,7 @@ const tryNavigatePostInfo = async function(
 		return null;};
 
 	let info = null;
-	switch (getDomainKind(state)) {
+	switch (getDomain(state).kind) {
 		case `danbooru` :
 			let respObj = tryParseJson(resp.responseText);
 			try {
@@ -1385,7 +1370,7 @@ const singlePostInfoFromGelbooruApiPostsElem = function(state, postsElem) {
 	let thumbnailHref = post.getAttribute(`preview_url`);
 	if (thumbnailHref === imageHref) {
 		thumbnailHref = undefined;
-	} else if (state.domain === `r34xxx`) {
+	} else if (getDomain(state).name === `r34xxx`) {
 		/* r34xxx search result pages have the post id at the end of the
 		thumbnail image url, but api search results don't,
 		add it to avoid cache misses: */
@@ -1515,18 +1500,37 @@ const stateFromUrl = function(url) {
 	if (!(url instanceof URL)) {
 		return null;};
 
-	let domain = hostnameDomainTbl[url.hostname];
-	if (domain === undefined) {
+	let origin = url.origin;
+
+	if (getDomain({origin}) === undefined) {
 		/* unknown site */
 		return null;};
 
-	return {
-		currentPostId : postIdFromUrl({domain}, url),
+	return Object.freeze({
+		currentPostId : postIdFromUrl({origin}, url),
 		scaleMode : `fit`,
 		...stateFromFragment(url.hash),
 		origin : url.origin,
-		domain,
-		searchExpr : searchExprFromUrl({domain}, url),};
+		searchExpr : searchExprFromUrl({origin}, url),});
+};
+
+const getDomain = function({origin}) {
+	dbg && assert(typeof origin === `string`);
+
+	let url = tryParseHref(origin);
+	if (url === null) {
+		return null;};
+
+	let domain = hostnameDomainTbl[url.hostname];
+	if (typeof domain !== `object`) {
+		return null;};
+
+	dbg && assert(typeof domain.name === `string`);
+	dbg && assert(typeof domain.kind === `string`);
+	dbg && assert(typeof domain.subkind === `string`
+		|| domain.kind !== `danbooru`);
+
+	return domain;
 };
 
 test(_ => {
@@ -1606,16 +1610,16 @@ test(_ => {
 	};
 });
 
-const searchExprFromUrl = function({domain}, url) {
+const searchExprFromUrl = function({origin}, url) {
 	if (!(url instanceof URL)) {
 		return undefined;};
 
-	let domainKind = getDomainKind({domain});
+	let domain = getDomain({origin});
 
 	let searchExpr = url.searchParams.get(`tags`);
 
-	if (domainKind === `danbooru`
-		&& domain !== `danbooru`)
+	if (domain.kind === `danbooru`
+		&& domain.subkind !== `danbooru`)
 	{
 		let xs = tryParsePathFromUrl(url);
 		if (xs !== null
@@ -1624,6 +1628,7 @@ const searchExprFromUrl = function({domain}, url) {
 			&& xs[1] === `index`
 			&& /^\d+$/.test(xs[2]))
 		{
+			/* path takes precedence searchParams */
 			searchExpr = xs[3];
 		};
 	};
@@ -1636,7 +1641,7 @@ const searchExprFromUrl = function({domain}, url) {
 
 	searchExpr = searchExpr.trim();
 
-	if (domainKind === `gelbooru`
+	if (domain.kind === `gelbooru`
 		&& searchExpr === `all`)
 	{
 		return undefined;};
@@ -1653,10 +1658,10 @@ const isGalleryUrl = function(url) {
 		/* unknown site */
 		return false;};
 
-	switch (getDomainKind({domain})) {
+	switch (domain.kind) {
 		case `danbooru` :
 			let xs = tryParsePathFromUrl(url);
-			if (domain === `danbooru`) {
+			if (domain.subkind === `danbooru`) {
 				return xs !== null
 					&& (xs.length === 0
 						|| (xs.length === 1
@@ -1686,14 +1691,15 @@ test(_ => {
 	// todo
 });
 
-const postIdFromUrl = function({domain}, url) {
+const postIdFromUrl = function({origin}, url) {
 	if (!(url instanceof URL)) {
 		return -1;};
 
-	switch (getDomainKind({domain})) {
+	let domain = getDomain({origin});
+	switch (domain.kind) {
 		case `danbooru` :
 			let xs = tryParsePathFromUrl(url);
-			if (domain === `danbooru`) {
+			if (domain.subkind === `danbooru`) {
 				if (xs !== null && xs[0] === `posts`) {
 					return tryParsePostId(xs[1]);};
 			} else {
@@ -1726,14 +1732,11 @@ const requestPostInfoUrl = function(state, postId) {
 	dbg && assert(isPostId(postId));
 
 	let url = new URL(state.origin);
+	let domain = getDomain(state);
 
-	switch (getDomainKind(state)) {
+	switch (domain.kind) {
 		case `danbooru` :
-			if (state.domain === `danbooru`) {
-				url.pathname = `/posts.json`;
-			} else {
-				url.pathname = `/post/index.json`;};
-
+			url.pathname = `/post/index.json`;
 			url.searchParams.set(`limit`, `1`);
 			url.searchParams.set(`tags`, `id:${postId}`);
 
@@ -1757,10 +1760,11 @@ const requestPostNotesUrl = function(state, postId) {
 	dbg && assert(isPostId(postId));
 
 	let url = new URL(state.origin);
+	let domain = getDomain(state);
 
-	switch (getDomainKind(state)) {
+	switch (domain.kind) {
 		case `danbooru` :
-			if (state.domain === `danbooru`) {
+			if (domain.subkind === `danbooru`) {
 				url.pathname = `/notes.json`;
 				url.searchParams.set(`search[post_id]`, `${postId}`);
 				url.searchParams.set(`search[is_active]`, `true`);
@@ -1792,35 +1796,34 @@ const requestNavigatePostInfoUrl = function(
 	dbg && assert(!searchExprContainsOrderTerm(searchExpr));
 
 	let url = new URL(state.origin);
+	let domain = getDomain(state);
 
-	switch (getDomainKind(state)) {
+	switch (domain.kind) {
 		case `danbooru` : {
 			url.searchParams.set(`limit`, `1`);
+			url.pathname = `/post/index.json`;
 
-			if (state.domain === `danbooru`) {
-				url.pathname = `/posts.json`;
-				url.searchParams.set(`tags`, searchExpr);
+			let q = ``;
+
+			if (domain.subkind === `danbooru`) {
 				url.searchParams.set(`page`,
 					direction === `prev`
 						? `b${postId}` /* before */
 						: `a${postId}` /* after */);
 			} else {
-				url.pathname = `/post/index.json`;
-	
-				let q = ``;
 				if (direction === `prev`) {
-					if (state.domain === `e621`) {
+					if (domain.subkind === `e621`) {
 						url.searchParams.set(`before_id`, `${postId}`);
 					} else {
 						q += `id:<${postId} order:-id`;};
 				} else {
 					q += `id:>${postId} order:id`;};
-	
-				if (typeof searchExpr === `string` && searchExpr.length !== 0) {
-					q += ` `+searchExpr;};
-	
-				url.searchParams.set(`tags`, q);
 			};
+
+			if (typeof searchExpr === `string` && searchExpr.length !== 0) {
+				q += (q ? ` ` : ``)+searchExpr;};
+
+			url.searchParams.set(`tags`, q);
 
 			return url;
 		};
@@ -1852,7 +1855,7 @@ const requestNavigatePostInfoUrl = function(
 
 test(_ => {
 	let url = requestNavigatePostInfoUrl(
-		{domain : `r34xxx`, origin : `https://rule34.xxx`},
+		{origin : `https://rule34.xxx`},
 		265, `next`, `absurdres`);
 
 	assert(url.origin === `https://rule34.xxx`);
@@ -1861,8 +1864,21 @@ test(_ => {
 	assert(url.searchParams.get(`s`) === `post`);
 	assert(url.searchParams.get(`q`) === `index`);
 	assert(url.searchParams.get(`limit`) === `1`);
-	assert(url.searchParams.get(`tags`)
-		=== `id:>265 sort:id:asc absurdres`);
+	assert(url.searchParams.get(`tags`) === `id:>265 sort:id:asc absurdres`);
+
+	// todo
+});
+
+test(_ => {
+	let url = requestNavigatePostInfoUrl(
+		{origin : `https://testbooru.donmai.us`},
+		265, `next`, `absurdres`);
+
+	assert(url.origin === `https://testbooru.donmai.us`);
+	assert(url.pathname === `/post/index.json`);
+	assert(url.searchParams.get(`limit`) === `1`);
+	assert(url.searchParams.get(`page`) === `a265`);
+	assert(url.searchParams.get(`tags`) === `absurdres`);
 
 	// todo
 });
@@ -1871,10 +1887,11 @@ const postPageUrl = function(state, postId) {
 	dbg && assert(isPostId(postId));
 
 	let url = new URL(state.origin);
+	let domain = getDomain(state);
 
-	switch (getDomainKind(state)) {
+	switch (domain.kind) {
 		case `danbooru` :
-			if (state.domain === `danbooru`) {
+			if (domain.subkind === `danbooru`) {
 				url.pathname = `/posts/${postId}`;
 			} else {
 				url.pathname = `/post/show/${postId}`;};
@@ -2297,12 +2314,15 @@ const ensureApplyGlobalStyleRules = function(state, doc, getRules) {
 	if (doc.getElementById(qual(`global-stylesheet`))
 		instanceof HTMLStyleElement)
 	{
+		log(`global stylesheet already applied`);
 		return;};
+	log(`applying global stylesheet …`);
 
 	let root = document.documentElement;
-	root.classList.add(qual(`domain-${state.domain}`));
-	root.classList.add(qual(`domain-kind-${getDomainKind(state)}`));
-	root.classList.add(qual(`theme-${getInlineViewTheme(state.domain, doc)}`));
+	let domain = getDomain(state);
+	root.classList.add(qual(`domain-${domain.name}`));
+	root.classList.add(qual(`domain-kind-${domain.kind}`));
+	root.classList.add(qual(`theme-${getInlineViewTheme(domain, doc)}`));
 
 	let style = doc.createElement(`style`);
 	style.id = qual(`global-stylesheet`);
@@ -2312,14 +2332,14 @@ const ensureApplyGlobalStyleRules = function(state, doc, getRules) {
 		style.sheet.insertRule(rule, style.sheet.cssRules.length);};
 };
 
-const getInlineViewTheme = function(domain, doc) {
+const getInlineViewTheme = function({name}, doc) {
 	/* dark page → light theme
 	light page → dark theme */
 
-	if (domain === `danbooru` || domain === `safebooru`) {
+	if (name === `danbooru` || name === `safebooru`) {
 		return `dark`;
 
-	} else if (domain === `gelbooru`) {
+	} else if (name === `gelbooru`) {
 		for (let s of doc.styleSheets) {
 			let url = tryParseHref(s.href);
 			if (url !== null && url.pathname === `/responsive_dark.css`) {
@@ -2327,7 +2347,7 @@ const getInlineViewTheme = function(domain, doc) {
 		};
 		return `dark`;
 
-	} else if (domain === `r34xxx`) {
+	} else if (name === `r34xxx`) {
 		for (let s of doc.styleSheets) {
 			let url = tryParseHref(s.href);
 			if (url !== null && (
