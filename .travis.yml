@@ -30,7 +30,7 @@ script:
 - |
     argJson="{\
         \"filename\" : \"$releaseFilename\",\
-        \"homepageHref\" : \"https://bipface.github.io/booru-inline-gallery/dist/index.html\",\
+        \"homepageHref\" : \"https://github.com/$TRAVIS_REPO_SLUG/blob/$TRAVIS_BRANCH/README.md\",\
         \"downloadHref\" : \"https://github.com/$TRAVIS_REPO_SLUG/raw/$TRAVIS_BRANCH/dist/$releaseFilename\"}"
 
 # generate manifest.json:
