@@ -1,0 +1,32 @@
+{
+	"manifest_version": 2,
+	"name": "Booru: Inline Gallery",
+	"version": "2019.04.18",
+	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
+	"homepage_url": "https://bipface.github.io/booru-inline-gallery/dist/index.html",
+	"download_url": "https://github.com/bipface/booru-inline-gallery/raw/master/dist/booru-inline-gallery.user.js",
+	"converted_from_user_script": true,
+	"content_scripts": [
+		{
+			"js": [
+				"booru-inline-gallery.user.js"
+			],
+			"run_at": "document_end",
+			"matches": [
+				"*://danbooru.donmai.us/*",
+				"*://e621.net/*",
+				"*://gelbooru.com/*",
+				"*://realbooru.com/*",
+				"*://rule34.xxx/*",
+				"*://safebooru.org/*",
+				"*://testbooru.donmai.us/*",
+				"*://yande.re/*"
+			],
+			"exclude_matches": [],
+			"include_globs": [
+				"*"
+			],
+			"exclude_globs": []
+		}
+	]
+}
