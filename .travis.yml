@@ -1,0 +1,47 @@
+# run tests, build release, build docs, commit results back into /dist/ directory
+
+language: node_js
+node_js:
+- node
+
+if: commit_message !~ /^Deploy\s/ # prevent deployment re-triggering the build
+
+deploy:
+    provider: pages
+    github_token: $GITHUB_TOKEN
+    target_branch: master
+    skip_cleanup: true
+    keep_history: true
+    allow_empty_commit: false
+    local_dir: .
+    on:
+        branch: master
+
+before_script:
+- npm install -g jsdoc
+- jsdoc --version
+
+script:
+- mkdir -p ./dist
+- rm -rf ./dist/*
+
+- sourceFilename='booru-inline-gallery-debug.user.js'
+- releaseFilename='booru-inline-gallery.user.js'
+
+# run tests:
+- node "./$sourceFilename" run-unittests 'null'
+
+- |
+    argJson="{\
+        \"filename\" : \"$releaseFilename\",\
+        \"homepageHref\" : \"https://bipface.github.io/booru-inline-gallery/dist/index.html\",\
+        \"downloadHref\" : \"https://github.com/$TRAVIS_REPO_SLUG/raw/$TRAVIS_BRANCH/dist/$releaseFilename\"}"
+
+# generate manifest.json:
+- node "./$sourceFilename" create-manifest "$argJson" > ./dist/manifest.json
+
+# generate release mode userscript:
+- node "./$sourceFilename" create-release "$argJson" > "./dist/$releaseFilename"
+
+# generate documentation:
+- jsdoc --destination ./dist "./$sourceFilename"
