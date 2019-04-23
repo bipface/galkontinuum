@@ -1,4 +1,4 @@
-# run tests, build release, build docs, commit results back into /dist/ directory
+# run tests, build release, build readme, commit results back into /dist/ directory
 
 language: node_js
 node_js:
@@ -16,10 +16,6 @@ deploy:
     local_dir: .
     on:
         branch: master
-
-before_script:
-- npm install -g jsdoc
-- jsdoc --version
 
 script:
 - mkdir -p ./dist
@@ -44,4 +40,5 @@ script:
 - node "./$sourceFilename" create-release "$argJson" > "./dist/$releaseFilename"
 
 # generate documentation:
-- jsdoc --destination ./dist "./$sourceFilename"
+- echo "[![Build Status](https://travis-ci.com/$TRAVIS_REPO_SLUG.svg?branch=$TRAVIS_BRANCH)](https://travis-ci.com/$TRAVIS_REPO_SLUG)" > ./README.md
+# - node "./$sourceFilename" create-readme "$argJson" >> ./README.md
