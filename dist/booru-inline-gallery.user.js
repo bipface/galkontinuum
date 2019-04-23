@@ -2,7 +2,7 @@
 // @name		Booru: Inline Gallery
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @version		2019.04.18
-// @description https://bipface.github.io/booru-inline-gallery/dist/index.html
+// @description https://github.com/bipface/booru-inline-gallery/blob/master/README.md
 // @downloadURL https://github.com/bipface/booru-inline-gallery/raw/master/dist/booru-inline-gallery.user.js
 // @run-at		document-end
 // @grant		GM_xmlhttpRequest
@@ -26,7 +26,7 @@ const manifest = {
 	"name": "Booru: Inline Gallery",
 	"version": "2019.04.18",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
-	"homepage_url": "https://bipface.github.io/booru-inline-gallery/dist/index.html",
+	"homepage_url": "https://github.com/bipface/booru-inline-gallery/blob/master/README.md",
 	"download_url": "https://github.com/bipface/booru-inline-gallery/raw/master/dist/booru-inline-gallery.user.js",
 	"converted_from_user_script": true,
 	"content_scripts": [
