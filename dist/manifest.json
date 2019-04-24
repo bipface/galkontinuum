@@ -1,15 +1,15 @@
 {
 	"manifest_version": 2,
-	"name": "Booru: Inline Gallery",
+	"name": "Galkontinuum",
 	"version": "2019.04.18",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/booru-inline-gallery/blob/master/README.md",
-	"download_url": "https://github.com/bipface/booru-inline-gallery/raw/master/dist/booru-inline-gallery.user.js",
+	"download_url": "https://github.com/bipface/booru-inline-gallery/raw/master/dist/galkontinuum.user.js",
 	"converted_from_user_script": true,
 	"content_scripts": [
 		{
 			"js": [
-				"booru-inline-gallery.user.js"
+				"galkontinuum.user.js"
 			],
 			"run_at": "document_end",
 			"matches": [

@@ -1,9 +1,9 @@
 ﻿// ==UserScript==
-// @name		Booru: Inline Gallery
+// @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @version		2019.04.18
 // @description https://github.com/bipface/booru-inline-gallery/blob/master/README.md
-// @downloadURL https://github.com/bipface/booru-inline-gallery/raw/master/dist/booru-inline-gallery.user.js
+// @downloadURL https://github.com/bipface/booru-inline-gallery/raw/master/dist/galkontinuum.user.js
 // @run-at		document-end
 // @grant		GM_xmlhttpRequest
 // @grant		GM.xmlHttpRequest
@@ -23,16 +23,16 @@ const dbg = false;
 
 const manifest = {
 	"manifest_version": 2,
-	"name": "Booru: Inline Gallery",
+	"name": "Galkontinuum",
 	"version": "2019.04.18",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/booru-inline-gallery/blob/master/README.md",
-	"download_url": "https://github.com/bipface/booru-inline-gallery/raw/master/dist/booru-inline-gallery.user.js",
+	"download_url": "https://github.com/bipface/booru-inline-gallery/raw/master/dist/galkontinuum.user.js",
 	"converted_from_user_script": true,
 	"content_scripts": [
 		{
 			"js": [
-				"booru-inline-gallery.user.js"
+				"galkontinuum.user.js"
 			],
 			"run_at": "document_end",
 			"matches": [
@@ -56,7 +56,8 @@ const manifest = {
 /* note: in chrome, standalone userscripts don't have access to `GM_info` */
 
 const readmeMarkdown = `
-# Inline Gallery
+# Galkontinuum
+Galkontinuum is a [userscript](https://en.wikipedia.org/wiki/Userscript) which enables slideshow-style browsing of search results on the Booru family of websites.
 `;
 
 /*
@@ -145,9 +146,9 @@ test cases:
 			https://e621.net/post/index/1/id:1848964
 			https://rule34.xxx/?page=post&s=list&tags=id%3a2386407
 		- nonexistent:
-			https://rule34.xxx/?page=post&s=list#inline-gallery:{"currentPostId":59391120}
+			https://rule34.xxx/?page=post&s=list#galkontinuum:{"currentPostId":59391120}
 		- inaccessible:
-			https://danbooru.donmai.us/posts#inline-gallery:{"currentPostId":3453471}
+			https://danbooru.donmai.us/posts#galkontinuum:{"currentPostId":3453471}
 
 	sites:
 		- rule34 (special-case for thumbnail urls,
@@ -532,7 +533,7 @@ const onKeyDownGlobal = function(ev) {
 
 /* -------------------------------------------------------------------------- */
 
-const namespace = `inline-gallery`;
+const namespace = `galkontinuum`;
 
 const qual = function(n) {
 	return namespace+`-`+n;
