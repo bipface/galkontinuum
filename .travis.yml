@@ -41,4 +41,4 @@ script:
 
 # generate documentation:
 - echo "[![Build Status](https://travis-ci.com/$TRAVIS_REPO_SLUG.svg?branch=$TRAVIS_BRANCH)](https://travis-ci.com/$TRAVIS_REPO_SLUG)" > ./README.md
-# - node "./$sourceFilename" create-readme "$argJson" >> ./README.md
+- node "./$sourceFilename" create-readme "$argJson" >> ./README.md
