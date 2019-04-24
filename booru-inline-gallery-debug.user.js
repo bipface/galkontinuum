@@ -25,7 +25,7 @@ const manifest = null; /* will be assigned manfiest object in release-mode */
 /* note: in chrome, standalone userscripts don't have access to `GM_info` */
 
 const readmeMarkdown = `
-	# Inline Gallery
+# Inline Gallery
 `;
 
 /*
