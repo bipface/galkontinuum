@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @version		2019.04.18
-// @description https://github.com/bipface/galkontinuum/blob/master/README.md
+// @description https://github.com/bipface/galkontinuum/tree/master/#readme
 // @downloadURL https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
 // @run-at		document-end
 // @grant		GM_xmlhttpRequest
@@ -26,7 +26,7 @@ const manifest = {
 	"name": "Galkontinuum",
 	"version": "2019.04.18",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
-	"homepage_url": "https://github.com/bipface/galkontinuum/blob/master/README.md",
+	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"download_url": "https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js",
 	"converted_from_user_script": true,
 	"content_scripts": [
