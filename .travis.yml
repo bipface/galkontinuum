@@ -30,7 +30,7 @@ script:
 - |
     argJson="{\
         \"filename\" : \"$releaseFilename\",\
-        \"homepageHref\" : \"https://github.com/$TRAVIS_REPO_SLUG/blob/$TRAVIS_BRANCH/README.md\",\
+        \"homepageHref\" : \"https://github.com/$TRAVIS_REPO_SLUG/tree/$TRAVIS_BRANCH/#readme\",\
         \"downloadHref\" : \"https://github.com/$TRAVIS_REPO_SLUG/raw/$TRAVIS_BRANCH/dist/$releaseFilename\"}"
 
 # generate manifest.json:
