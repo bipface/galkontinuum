@@ -21,8 +21,8 @@ script:
 - mkdir -p ./dist
 - rm -rf ./dist/*
 
-- sourceFilename='booru-inline-gallery-debug.user.js'
-- releaseFilename='booru-inline-gallery.user.js'
+- sourceFilename='galkontinuum-debug.user.js'
+- releaseFilename='galkontinuum.user.js'
 
 # run tests:
 - node "./$sourceFilename" run-unittests 'null'
