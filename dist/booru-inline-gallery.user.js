@@ -56,7 +56,7 @@ const manifest = {
 /* note: in chrome, standalone userscripts don't have access to `GM_info` */
 
 const readmeMarkdown = `
-	# Inline Gallery
+# Inline Gallery
 `;
 
 /*
