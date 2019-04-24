@@ -208,11 +208,11 @@ if (typeof globalObj !== `object`) {
 	throw new Error(`failed to obtain global object`);};
 
 const runtime =
-	(typeof globalObj.document == `object`
+	(typeof globalObj.document === `object`
 		&& globalObj.document.defaultView === globalObj)
 		? `browser`
-	: (typeof globalObj.process == `object`
-		&& typeof globalObj.process.release == `object`
+	: (typeof globalObj.process === `object`
+		&& typeof globalObj.process.release === `object`
 		&& globalObj.process.release.name === `node`)
 		? `nodejs`
 	: undefined;
