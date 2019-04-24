@@ -1,5 +1,5 @@
 ﻿// ==UserScript==
-// @name		Booru: Inline Gallery
+// @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @version		2019.04.18
 // @description	.
@@ -25,7 +25,8 @@ const manifest = null; /* will be assigned manfiest object in release-mode */
 /* note: in chrome, standalone userscripts don't have access to `GM_info` */
 
 const readmeMarkdown = `
-# Inline Gallery
+# Galkontinuum
+Galkontinuum is a [userscript](https://en.wikipedia.org/wiki/Userscript) which enables slideshow-style browsing of search results on the Booru family of websites.
 `;
 
 /*
@@ -114,9 +115,9 @@ test cases:
 			https://e621.net/post/index/1/id:1848964
 			https://rule34.xxx/?page=post&s=list&tags=id%3a2386407
 		- nonexistent:
-			https://rule34.xxx/?page=post&s=list#inline-gallery:{"currentPostId":59391120}
+			https://rule34.xxx/?page=post&s=list#galkontinuum:{"currentPostId":59391120}
 		- inaccessible:
-			https://danbooru.donmai.us/posts#inline-gallery:{"currentPostId":3453471}
+			https://danbooru.donmai.us/posts#galkontinuum:{"currentPostId":3453471}
 
 	sites:
 		- rule34 (special-case for thumbnail urls,
@@ -501,7 +502,7 @@ const onKeyDownGlobal = function(ev) {
 
 /* -------------------------------------------------------------------------- */
 
-const namespace = `inline-gallery`;
+const namespace = `galkontinuum`;
 
 const qual = function(n) {
 	return namespace+`-`+n;
