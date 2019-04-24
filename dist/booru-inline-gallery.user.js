@@ -55,6 +55,10 @@ const manifest = {
 };
 /* note: in chrome, standalone userscripts don't have access to `GM_info` */
 
+const readmeMarkdown = `
+	# Inline Gallery
+`;
+
 /*
 
 known issues/limitations:
@@ -263,12 +267,18 @@ const nodejsEntrypoint = async function(command, argJson) {
 
 	switch (command) {
 		case undefined :
-		case `run-unittests` :
+		case `run-unittests` : {
 			if (dbg) {
 				runUnittests(unittests);
 			} else {
 				logWarn(`no tests defined (debug mode disabled)`);};
 			return;
+		};
+
+		case `create-readme` : {
+			process.stdout.write(readmeMarkdown);
+			return;
+		};
 
 		case `create-release` : {
 			/* reads the current source file and applies
