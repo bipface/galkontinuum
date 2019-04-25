@@ -40,8 +40,8 @@ compatible forks such as e621 and Moebooru.
 
 ## Chrome - standalone extension (Windows)
 
-1. Download the files `dist/galkontinuum.user.js` and `dist/manifest.json` into
-a new directory.
+1. Download the files \`dist/galkontinuum.user.js\` and \`dist/manifest.json\`
+into a new directory.
 
 2. Go to [chrome://extensions](chrome://extensions).
 
@@ -61,7 +61,6 @@ known issues/limitations:
 	- moebooru is_held flag (see below)
 	- 6-term search limit on e621/moebooru
 		https://e621.net/post/index?tags=a+b+c+d+e+f+g
-	- thumbnail overlay covers the drop-down menu on rule34 mobile layout
 	- swf videos not supported yet
 	- on e621 it seems only one id:* search term can be specified
 		test: https://e621.net/post/index.json?tags=id:500%20id:%3E1000%20order:id&limit=1
