@@ -90,10 +90,10 @@ const manifest = {
 /* note: in chrome, standalone userscripts don't have access to `GM_info` */
 
 const globalObj =
-	typeof globalThis !== `undefined` ? globalThis :
 	typeof self !== `undefined` ? self :
 	typeof global !== `undefined` ? global :
 	Function(`return this`)();
+/* don't use `globalThis` - not assigned correctly in some environments */
 
 if (typeof globalObj !== `object`) {
 	throw new Error(`failed to obtain global object`);};
@@ -3060,6 +3060,7 @@ if (runtime === `browser`) {
 		});
 
 } else {
+	debugger;
 	throw new Error(`unrecognised runtime environment`);};
 
 /* -------------------------------------------------------------------------- */
