@@ -1,8 +1,10 @@
 ﻿// ==UserScript==
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
+// @author		Bipface
 // @version		2019.04.18
-// @description https://github.com/bipface/galkontinuum/tree/master/#readme
+// @description	Enhanced browsing on Booru galleries
+// @homepageURL https://github.com/bipface/galkontinuum/tree/master/#readme
 // @downloadURL https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
 // @run-at		document-end
 // @grant		GM_xmlhttpRequest
@@ -25,9 +27,10 @@ const manifest = {
 	"manifest_version": 2,
 	"name": "Galkontinuum",
 	"version": "2019.04.18",
+	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
-	"download_url": "https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js",
+	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
 		{
@@ -57,18 +60,39 @@ const manifest = {
 
 const readmeMarkdown = `
 # Galkontinuum
-Galkontinuum is a [userscript](https://en.wikipedia.org/wiki/Userscript) which enables slideshow-style browsing of search results on the Booru family of websites.
-It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and compatible forks such as e621 and Moebooru.`;
+Galkontinuum is a [userscript][1] which enables slideshow-style browsing of
+search results on the Booru family of sites.
+
+It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
+compatible forks such as e621 and Moebooru.
+
+[1]: https://en.wikipedia.org/wiki/Userscript
+
+# Installation
+
+## Chrome - standalone extension (Windows)
+
+1. Download the files \`dist/galkontinuum.user.js\` and \`dist/manifest.json\`
+into a new directory.
+
+2. Go to [chrome://extensions](chrome://extensions).
+
+3. Enable the "Developer mode" option and choose "Load unpacked".
+[Load unpacked](https://i.imgur.com/RDu11ts.png)
+
+4. Select the directory containing the downloaded files.
+[Select Folder](https://i.imgur.com/mvJnMHQ.png)
+`;
 
 /*
 
 known issues/limitations:
 
+	- safebooru: mobile layout screws up everything
 	- yande.re: gallary results are in an unknown order
 	- moebooru is_held flag (see below)
 	- 6-term search limit on e621/moebooru
 		https://e621.net/post/index?tags=a+b+c+d+e+f+g
-	- thumbnail overlay covers the drop-down menu on rule34 mobile layout
 	- swf videos not supported yet
 	- on e621 it seems only one id:* search term can be specified
 		test: https://e621.net/post/index.json?tags=id:500%20id:%3E1000%20order:id&limit=1
@@ -306,7 +330,7 @@ const nodejsEntrypoint = async function(command, argJson) {
 
 			/* note: `for await (…)` isn't supported in firefox 56 */
 
-			let outputXs = createReleaseSegments(lines, manif);
+			let outputXs = createReleaseSegments(lines, manif, arg);
 			for (let value, iter = outputXs[Symbol.asyncIterator]();
 				!({value} = await iter.next()).done;)
 			{
@@ -321,8 +345,8 @@ const nodejsEntrypoint = async function(command, argJson) {
 
 			parameters:
 				- "filename" : filename for `js : […]` section
-				- "homepageHref" : address for `homepage_url : …` field
-				- "downloadHref" : address for `download_url : …` field
+				- "homepageHref" : address for `@homepageURL` field
+				- "downloadHref" : address for `@downloadURL` field
 
 			result is written to stdout */
 
@@ -363,24 +387,38 @@ const runUnittests = function(xs) {
 		throw new Error(`${failCount} unittest(s) failed`);};
 };
 
-const createReleaseSegments = function(srcLines, manif) {
+const createReleaseSegments = function(
+	srcLines, manif, {downloadHref, homepageHref})
+{
 	dbg && assert(typeof srcLines[Symbol.asyncIterator] === `function`);
 	dbg && assert(typeof manif === `object`);
+
+	let homepageUrl = null;
+	if (typeof homepageHref === `string`) {
+		homepageUrl = tryParseHref(homepageHref);};
+	enforce(homepageUrl !== null || homepageHref === undefined,
+		`invalid url "${homepageHref}"`);
+
+	let downloadUrl = null;
+	if (typeof downloadHref === `string`) {
+		downloadUrl = tryParseHref(downloadHref);};
+	enforce(downloadUrl !== null || downloadHref === undefined,
+		`invalid url "${downloadHref}"`);
 
 	let next = async function() {
 		let {value, done} = await this.linesIter.next();
 
 		if (done) {
 			;
-		} else if (/^\s*\/\/\s*@downloadURL(\s.*)?$/.test(value)
-			&& typeof manif.download_url === `string`)
+		} else if (downloadUrl !== null
+			&& /^\s*\/\/\s*@downloadURL(\s.*)?$/.test(value))
 		{
-			value = `// @downloadURL ${manif.download_url}`;
+			value = `// @downloadURL ${downloadUrl.href}`;
 
-		} else if (/^\s*\/\/\s*@description(\s.*)?$/.test(value)
-			&& typeof manif.homepage_url === `string`)
+		} else if (homepageUrl !== null
+			&& /^\s*\/\/\s*@homepageURL(\s.*)?$/.test(value))
 		{
-			value = `// @description ${manif.homepage_url}`;
+			value = `// @homepageURL ${homepageUrl.href}`;
 
 		} else if (/^const\s+dbg\s*=[^;]*;.*$/.test(value)) {
 			value = `const dbg = false;`;
@@ -402,9 +440,7 @@ const createReleaseSegments = function(srcLines, manif) {
 	};
 };
 
-const createManifest = async function(srcLines,
-	{filename, homepageHref, downloadHref})
-{
+const createManifest = async function(srcLines, {filename, homepageHref}) {
 	/* https://developer.chrome.com/extensions/manifest */
 
 	dbg && assert(typeof srcLines[Symbol.asyncIterator] === `function`);
@@ -416,12 +452,6 @@ const createManifest = async function(srcLines,
 		homepageUrl = tryParseHref(homepageHref);};
 	enforce(homepageUrl !== null || homepageHref === undefined,
 		`invalid url "${homepageHref}"`);
-
-	let downloadUrl = null;
-	if (typeof downloadHref === `string`) {
-		downloadUrl = tryParseHref(downloadHref);};
-	enforce(downloadUrl !== null || downloadHref === undefined,
-		`invalid url "${downloadHref}"`);
 
 	let name = filename;
 	let version = `0000.00.00`;
@@ -468,9 +498,10 @@ const createManifest = async function(srcLines,
 		manifest_version : 2,
 		name,
 		version, /* note: must consist of digits and dots */
+		author : `Bipface`,
 		key : `u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=`,
 		homepage_url : (homepageUrl ? homepageUrl.href : undefined),
-		download_url : (downloadUrl ? downloadUrl.href : undefined),
+		minimum_chrome_version : `60`, /* suspected */
 		converted_from_user_script : true,
 		content_scripts : [
 			{
@@ -2678,6 +2709,7 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${thumbClass} {
 			position : relative;
+			isolation : isolate;
 
 			/* centre the thumbnail images: */
 			display : inline-flex !important;
