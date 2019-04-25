@@ -79,8 +79,9 @@ const runtime =
 /* workaround for prototype.js (which redefines `window.Element`): */
 const Element =
 	runtime === `browser`
-	&& !(document.documentElement instanceof globalObj.Element)
-		? Object.getPrototypeOf(HTMLElement.prototype).constructor
+		? ((document.documentElement instanceof globalObj.Element)
+			? globalObj.Element
+			: Object.getPrototypeOf(HTMLElement.prototype).constructor)
 		: undefined;
 if (runtime === `browser` && !(document.documentElement instanceof Element)) {
 	throw new Error(`tampered Element class`);};
