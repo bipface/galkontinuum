@@ -1,5 +1,4 @@
 [![Build Status](https://travis-ci.com/bipface/galkontinuum.svg?branch=master)](https://travis-ci.com/bipface/galkontinuum)
-
 # Galkontinuum
 Galkontinuum is a [userscript][1] which enables slideshow-style browsing of
 search results on the Booru family of sites.
@@ -9,9 +8,11 @@ compatible forks such as e621 and Moebooru.
 
 [1]: https://en.wikipedia.org/wiki/Userscript
 
-# Installation
+## Installation
 
-## Chrome - standalone extension (Windows)
+### Chrome - standalone extension (Windows)
+
+Be aware that the script will not update automatically when installed this way.
 
 1. Download the files `dist/galkontinuum.user.js` and `dist/manifest.json`
 into a new directory.
@@ -23,3 +24,7 @@ into a new directory.
 
 4. Select the directory containing the downloaded files.
 ![Select Folder](https://i.imgur.com/mvJnMHQ.png)
+
+## Limitations
+
+
