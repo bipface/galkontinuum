@@ -32,6 +32,11 @@ compatible forks such as e621 and Moebooru.
 
 ## Installation
 
+### Requirements
+
+- Firefox 56 or newer.
+- Chrome 60 or newer.
+
 ### Chrome - standalone extension (Windows)
 
 Be aware that the script will not update automatically when installed this way.
@@ -49,7 +54,16 @@ into a new directory.
 
 ## Limitations
 
+- On Gelbooru-based sites, posts added within the last few minutes may fail to
+load due to the search database being out of sync with the main database.
 
+- Posts with an ID less than zero or greater than 2147483647 will not be
+recognised. It is unknown whether there are any boorus with IDs outside this
+range.
+
+- On Danbooru-based sites, it is suspected that only up to 1000 notes will be
+shown on any single post. It is unknown whether there are any posts with over
+1000 notes.
 `;
 
 const dbg = false;
@@ -120,9 +134,8 @@ if (runtime === `browser` && !(document.documentElement instanceof Element)) {
 
 /*
 
-known issues/limitations:
+known issues:
 
-	- `runtime` undefined on mobile firefox
 	- yande.re: gallary results are in an unknown order
 	- moebooru is_held flag (see below)
 	- 6-term search limit on e621/moebooru
@@ -142,18 +155,13 @@ known issues/limitations:
 	- navigating on danbooru does't skip posts that aren't visible to the
 		current user or that have status:deleted
 		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
-	- on some boorus, the first few posts of the default gallery may not
-		work due to the search database being up to 5 minutes behind
-		the main database
 	- thumbnail appears even when full-size image loads from cache
 		(causes background 'flashing' when navigating
 		through images with transparent backgrounds)
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
-	- danbooru: can only show up to 1000 notes for a single post (probably)
 	- gelbooru: thumbnail overlay is exactly the size of the thumbnail itself:
 		https://i.imgur.com/YJjIzxt.png
-	- isPostId() limited to 2147483647
 	- tryParsePostId() imposes a much stricter syntax than the sites
 		themselves seem to,
 		for example,
