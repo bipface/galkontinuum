@@ -16,10 +16,10 @@ compatible forks such as e621 and Moebooru.
 1. Download the files `dist/galkontinuum.user.js` and `dist/manifest.json`
 into a new directory.
 
-2. Go to [chrome://extensions](chrome://extensions).
+2. Go to `chrome://extensions`.
 
-3. Enable the "Developer mode" option and choose "Load unpacked".
-[Load unpacked](https://i.imgur.com/RDu11ts.png)
+3. Enable the **Developer mode** option and choose **Load unpacked**.
+![Load unpacked](https://i.imgur.com/RDu11ts.png)
 
 4. Select the directory containing the downloaded files.
-[Select Folder](https://i.imgur.com/mvJnMHQ.png)
+![Select Folder](https://i.imgur.com/mvJnMHQ.png)
