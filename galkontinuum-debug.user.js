@@ -7,8 +7,7 @@
 // @homepageURL	.
 // @downloadURL	.
 // @run-at		document-end
-// @grant		GM_xmlhttpRequest
-// @grant		GM.xmlHttpRequest
+// @grant		none
 // @match		*://danbooru.donmai.us/*
 // @match		*://e621.net/*
 // @match		*://gelbooru.com/*
@@ -21,13 +20,8 @@
 
 'use strict';
 
-const dbg = true; /* will be assigned false in release-mode */
-
-const manifest = null; /* will be assigned manfiest object in release-mode */
-/* note: in chrome, standalone userscripts don't have access to `GM_info` */
-
-const readmeMarkdown = `
-# Galkontinuum
+const readmeMarkdown =
+`# Galkontinuum
 Galkontinuum is a [userscript][1] which enables slideshow-style browsing of
 search results on the Booru family of sites.
 
@@ -36,9 +30,11 @@ compatible forks such as e621 and Moebooru.
 
 [1]: https://en.wikipedia.org/wiki/Userscript
 
-# Installation
+## Installation
 
-## Chrome - standalone extension (Windows)
+### Chrome - standalone extension (Windows)
+
+Be aware that the script will not update automatically when installed this way.
 
 1. Download the files \`dist/galkontinuum.user.js\` and \`dist/manifest.json\`
 into a new directory.
@@ -50,13 +46,50 @@ into a new directory.
 
 4. Select the directory containing the downloaded files.
 ![Select Folder](https://i.imgur.com/mvJnMHQ.png)
+
+## Limitations
+
+
 `;
+
+const dbg = true; /* will be assigned false in release-mode */
+
+const manifest = null; /* will be assigned manfiest object in release-mode */
+/* note: in chrome, standalone userscripts don't have access to `GM_info` */
+
+const globalObj =
+	typeof globalThis !== `undefined` ? globalThis :
+	typeof self !== `undefined` ? self :
+	typeof global !== `undefined` ? global :
+	Function(`return this`)();
+
+if (typeof globalObj !== `object`) {
+	throw new Error(`failed to obtain global object`);};
+
+const runtime =
+	(typeof globalObj.document === `object`
+		&& globalObj.document.defaultView === globalObj)
+		? `browser`
+	: (typeof globalObj.process === `object`
+		&& typeof globalObj.process.release === `object`
+		&& globalObj.process.release.name === `node`)
+		? `nodejs`
+	: undefined;
+
+/* workaround for prototype.js (which redefines `window.Element`): */
+const Element =
+	runtime === `browser`
+	&& !(document.documentElement instanceof globalObj.Element)
+		? Object.getPrototypeOf(HTMLElement.prototype).constructor
+		: undefined;
+if (runtime === `browser` && !(document.documentElement instanceof Element)) {
+	throw new Error(`tampered Element class`);};
 
 /*
 
 known issues/limitations:
 
-	- safebooru: mobile layout screws up everything
+	- `runtime` undefined on mobile firefox
 	- yande.re: gallary results are in an unknown order
 	- moebooru is_held flag (see below)
 	- 6-term search limit on e621/moebooru
@@ -70,11 +103,6 @@ known issues/limitations:
 		(mainly affects mobile browsing)
 	- can't navigate when search query includes sort:* / order:*
 	- media type badge is misaligned on e621 thumbnails
-	- thumbnail appears even when full-size image loads from cache
-		(causes background 'flashing' when navigating
-		through images with transparent backgrounds)
-	- thumbnail may remain visible after the first frame of an animation is
-		fully rendered (noticible with alpha-transparent gifs)
 	- scrollIntoView() can get erratic when navigating
 	- animated gif / video loses playback position when scale-mode changes
 	- player appears with wrong dimensions before video starts loading
@@ -84,10 +112,15 @@ known issues/limitations:
 	- on some boorus, the first few posts of the default gallery may not
 		work due to the search database being up to 5 minutes behind
 		the main database
-	- isPostId() limited to 2147483647
+	- thumbnail appears even when full-size image loads from cache
+		(causes background 'flashing' when navigating
+		through images with transparent backgrounds)
+	- thumbnail may remain visible after the first frame of an animation is
+		fully rendered (noticible with alpha-transparent gifs)
 	- danbooru: can only show up to 1000 notes for a single post (probably)
 	- gelbooru: thumbnail overlay is exactly the size of the thumbnail itself:
 		https://i.imgur.com/YJjIzxt.png
+	- isPostId() limited to 2147483647
 	- tryParsePostId() imposes a much stricter syntax than the sites
 		themselves seem to,
 		for example,
@@ -102,7 +135,6 @@ known issues/limitations:
 
 proposed enhancements:
 
-	- use ordinary XMLHttpRequest; no need for CORS
 	- spinner on the thumbnail overlay
 	- more things in the footer bar
 	- click the image for next/prev/scale
@@ -220,25 +252,6 @@ references:
 */
 
 /* -------------------------------------------------------------------------- */
-
-const globalObj =
-	typeof globalThis !== `undefined` ? globalThis :
-	typeof self !== `undefined` ? self :
-	typeof global !== `undefined` ? global :
-	Function(`return this`)();
-
-if (typeof globalObj !== `object`) {
-	throw new Error(`failed to obtain global object`);};
-
-const runtime =
-	(typeof globalObj.document === `object`
-		&& globalObj.document.defaultView === globalObj)
-		? `browser`
-	: (typeof globalObj.process === `object`
-		&& typeof globalObj.process.release === `object`
-		&& globalObj.process.release.name === `node`)
-		? `nodejs`
-	: undefined;
 
 const unittests = dbg ? [] : null;
 const test =
@@ -511,32 +524,10 @@ const userscriptEntrypoint = function(doc) {
 	applyToDocument(doc);
 };
 
-const onKeyDownGlobal = function(ev) {
-	/* global hotkeys: */
-
-	let doc = ev.target.ownerDocument;
-
-	if (ev.key === `ArrowRight` || ev.key === `Right`) {
-		let btn = getSingleElemByClass(doc, qual(`prev`));
-		if (btn instanceof HTMLElement) {
-			btn.click();
-			ev.stopPropagation();};
-
-	} else if (ev.key === `ArrowLeft` || ev.key === `Left`) {
-		let btn = getSingleElemByClass(doc, qual(`next`));
-		if (btn instanceof HTMLElement) {
-			btn.click();
-			ev.stopPropagation();};
-	};
-};
-
 /* -------------------------------------------------------------------------- */
 
 const namespace = `galkontinuum`;
-
-const qual = function(n) {
-	return namespace+`-`+n;
-};
+const galk = new Proxy({}, {get : (_, name) => `${namespace}-${name}`})
 
 const hostnameDomainTbl = {
 	[`danbooru.donmai.us`] : {
@@ -555,6 +546,25 @@ const hostnameDomainTbl = {
 		kind : `danbooru`, subkind : `danbooru`, name : `danbooru`},
 	[`yande.re`] : {
 		kind : `danbooru`, subkind : `moebooru`, name : `yandere`},
+};
+
+const onKeyDownGlobal = function(ev) {
+	/* global hotkeys: */
+
+	let doc = ev.target.ownerDocument;
+
+	if (ev.key === `ArrowRight` || ev.key === `Right`) {
+		let btn = getSingleElemByClass(doc, galk.prev);
+		if (btn instanceof HTMLElement) {
+			btn.click();
+			ev.stopPropagation();};
+
+	} else if (ev.key === `ArrowLeft` || ev.key === `Left`) {
+		let btn = getSingleElemByClass(doc, galk.next);
+		if (btn instanceof HTMLElement) {
+			btn.click();
+			ev.stopPropagation();};
+	};
 };
 
 const applyToDocument = function(doc) {
@@ -606,7 +616,7 @@ const bindInlineView = async function(state, doc, view) {
 	let notesPromise = tryGetPostNotes(state, state.currentPostId);
 
 	while (view.hasChildNodes()) {
-		view.removeChild(view.firstChild);};
+		view.removeChild(view.lastChild);};
 
 	let scaleBtnMode = state.scaleMode === `fit` ? `full` : `fit`;
 
@@ -621,75 +631,77 @@ const bindInlineView = async function(state, doc, view) {
 		{...state, currentPostId : undefined}, baseHref);
 
 	view.insertAdjacentHTML(`beforeend`,
-		`<div class='${qual('iv-header')} ${qual('iv-ctrls')}'>
+		`<header class='${galk['iv-header']} ${galk['iv-ctrls']}'>
 			<a title='Toggle Size'
-				class='${qual('scale')} ${qual(scaleBtnMode)}'
+				class='${galk.scale} ${galk[scaleBtnMode]}'
 				href='${xmlEscape(scaleHref)}'>
-				<figure class='${qual('btn-icon')}'></figure></a>
+				<figure class='${galk['btn-icon']}'></figure></a>
 
-			<a title='Next' class='${qual('next')}' href='#'>
-				<figure class='${qual('btn-icon')}'></figure></a>
+			<a title='Next' class='${galk.next}' href='#'>
+				<figure class='${galk['btn-icon']}'></figure></a>
 
-			<a title='#${state.currentPostId}' class='${qual('ex')}'
+			<a title='#${state.currentPostId}' class='${galk.ex}'
 				href='${xmlEscape(exHref)}'>
-				<figure class='${qual('btn-icon')}'></figure></a>
+				<figure class='${galk['btn-icon']}'></figure></a>
 
-			<a title='Previous' class='${qual('prev')}' href='#'>
-				<figure class='${qual('btn-icon')}'></figure></a>
+			<a title='Previous' class='${galk.prev}' href='#'>
+				<figure class='${galk['btn-icon']}'></figure></a>
 
-			<a title='Close' class='${qual('close')}'
+			<a title='Close' class='${galk.close}'
 				href='${xmlEscape(closeHref)}'>
-				<figure class='${qual('btn-icon')}'></figure></a>
-		</div>
+				<figure class='${galk['btn-icon']}'></figure></a>
+		</header>
 
-		<div class='${qual('iv-content-panel')}'>
-			<div class='${qual('iv-content-stack')}'>
-				<div class='${qual('note-overlay')}'></div>
+		<section class='${galk['iv-content-panel']}'>
+			<section class='${galk['iv-content-stack']}'>
+				<aside class='${galk['note-overlay']}'></aside>
 
-				<img class='${qual('media')} ${qual('image')}'
-					hidden=''/>
+				<img class='${galk.media}' hidden=''/>
 
-				<video class='${qual('media')} ${qual('video')}'
-					hidden='' controls='' loop=''></video>
+				<video class='${galk.media}' hidden=''
+					controls='' loop=''></video>
 
-				<img class='${qual('media-sample')}' hidden=''/>
+				<img class='${galk['media-sample']}' hidden=''/>
 
-				<img class='${qual('media-thumbnail')}' hidden=''/>
+				<img class='${galk['media-thumbnail']}' hidden=''/>
 
-				<img class='${qual('media-placeholder')}'/>
+				<img class='${galk['media-placeholder']}'/>
 
-				<figure class='${qual('media-unavailable')}' hidden=''></figure>
-			</div>
-		</div>
+				<figure class='${galk['media-unavailable']}' hidden=''></figure>
+			</section>
+		</section>
 
-		<div class='${qual('iv-footer')} ${qual('iv-ctrls')}'>
+		<footer class='${galk['iv-footer']} ${galk['iv-ctrls']}'>
 			<a title='Toggle Notes' href=''
-				class='${qual('notes')} ${qual('disabled')}'>
-				<figure class='${qual('btn-icon')}'></figure></a>
-			<a class='${qual('disabled')}'></a>
-			<a class='${qual('disabled')}'></a>
-			<a class='${qual('disabled')}'></a>
-			<a class='${qual('disabled')}'></a>
-		</div>`);
+				class='${galk.notes} ${galk.disabled}'>
+				<figure class='${galk['btn-icon']}'></figure></a>
+			<a class='${galk.disabled}'></a>
+			<a class='${galk.disabled}'></a>
+			<a class='${galk.disabled}'></a>
+			<a title='Help' class='${galk.disabled}'></a>
+		</footer>`);
+
+	/* note: avoid using <div> due to global !important styles in safebooru's
+	mobile layout stylesheet */
 
 	let stackElem = enforce(getSingleElemByClass(
-		view, qual(`iv-content-stack`)));
+		view, galk[`iv-content-stack`]));
 
-	let imgElem = enforce(getSingleElemByClass(view, qual(`image`)));
+	let imgElem = enforce(view.querySelector(`img.${galk.media}`));
 
-	let vidElem = enforce(getSingleElemByClass(view, qual(`video`)));
+	let vidElem = enforce(view.querySelector(`video.${galk.media}`));
 
 	let sampleElem = enforce(getSingleElemByClass(
-		view, qual(`media-sample`)));
+		view, galk['media-sample']));
 
 	let thumbnailElem = enforce(getSingleElemByClass(
-		view, qual(`media-thumbnail`)));
+		view, galk['media-thumbnail']));
 
 	let phldrElem = enforce(getSingleElemByClass(
-		view, qual(`media-placeholder`)));
+		view, galk['media-placeholder']));
 
 	stackElem.classList.toggle(
-		qual('scale-fit'), state.scaleMode === `fit`);
+		galk['scale-fit'], state.scaleMode === `fit`);
 
 	let info = await infoPromise;
 	if (info !== null) {
@@ -733,7 +745,7 @@ const bindInlineView = async function(state, doc, view) {
 			/* hide the resampled versions when the full image loads: */
 			imgElem.addEventListener(`load`, ev => {
 				log(`media (image) ${ev.type} event triggered`);
-				thumbnailElem.classList.add(qual('animate-to-hidden'));
+				thumbnailElem.classList.add(galk['animate-to-hidden']);
 				//thumbnailElem.hidden = true;
 				//thumbnailElem.src = ``;
 
@@ -749,18 +761,18 @@ const bindInlineView = async function(state, doc, view) {
 		let notes = await notesPromise;
 		if (notes !== null && notes.length !== 0) {
 			let notesOvr = enforce(getSingleElemByClass(
-				view, qual(`note-overlay`)));
+				view, galk['note-overlay']));
 			bindNotesOverlay(state, notesOvr, info, notes);
 
-			view.classList.add(qual(`notes-visible`));
+			view.classList.add(galk['notes-visible']);
 
-			let notesBtn = enforce(getSingleElemByClass(view, qual(`notes`)));
+			let notesBtn = enforce(getSingleElemByClass(view, galk.notes));
 			notesBtn.addEventListener(`click`, ev => {
-				view.classList.toggle(qual(`notes-visible`));
+				view.classList.toggle(galk['notes-visible']);
 				ev.preventDefault();
 				ev.stopPropagation();
 			}, false);
-			notesBtn.classList.remove(qual(`disabled`));
+			notesBtn.classList.remove(galk.disabled);
 		};
 
 	} else {
@@ -769,7 +781,7 @@ const bindInlineView = async function(state, doc, view) {
 			` (id:${state.currentPostId})`);
 
 		let unavElem = enforce(getSingleElemByClass(
-			view, qual(`media-unavailable`)));
+			view, galk['media-unavailable']));
 
 		unavElem.style.backgroundImage = `url("${svgDataHref(
 			svgMediaUnavailable(state.currentPostId))}")`;
@@ -778,19 +790,19 @@ const bindInlineView = async function(state, doc, view) {
 		maybeScrollIntoView(doc.defaultView, unavElem, `instant`);
 	};
 
-	let prevBtn = enforce(getSingleElemByClass(view, qual(`prev`)));
-	let nextBtn = enforce(getSingleElemByClass(view, qual(`next`)));
+	let prevBtn = enforce(getSingleElemByClass(view, galk.prev));
+	let nextBtn = enforce(getSingleElemByClass(view, galk.next));
 
 	if (searchExprContainsOrderTerm(state, state.searchExpr)) {
 		/* navigation cannot work when using non-default sort order */
-		prevBtn.classList.add(qual(`disabled`));
-		nextBtn.classList.add(qual(`disabled`));
+		prevBtn.classList.add(galk.disabled);
+		nextBtn.classList.add(galk.disabled);
 	} else {
 		bindNavigationButton(state, doc, prevBtn, `prev`);
 		bindNavigationButton(state, doc, nextBtn, `next`);
 	};
 
-	let closeBtn = enforce(getSingleElemByClass(view, qual(`close`)));
+	let closeBtn = enforce(getSingleElemByClass(view, galk.close));
 	/* when closing, return to the corresponding thumbnail: */
 	closeBtn.addEventListener(`click`, () =>
 		onCloseInlineView(state, doc), false);
@@ -850,7 +862,7 @@ const bindNavigationButton = function(state, doc, btn, direction) {
 	primeNavigationButton(state, doc, btn, direction);
 
 	let onClick = ev => {
-		if (!btn.classList.contains(qual(`ready`))) {
+		if (!btn.classList.contains(galk.ready)) {
 			primeNavigationButton(state, doc, btn, direction);
 			if (ev) {
 				ev.preventDefault();
@@ -866,19 +878,19 @@ const primeNavigationButton = async function(state, doc, btn, direction) {
 	dbg && assert(isPostId(state.currentPostId));
 	dbg && assert(direction === `prev` || direction === `next`);
 
-	if (btn.classList.contains(qual(`pending`))
-		|| btn.classList.contains(qual(`ready`)))
+	if (btn.classList.contains(galk.pending)
+		|| btn.classList.contains(galk.ready))
 	{
 		return;};
 
-	btn.classList.add(qual(`pending`));
+	btn.classList.add(galk.pending);
 
 	let info;
 	try {
 		info = await tryNavigatePostInfo(
 			state, state.currentPostId, direction, state.searchExpr);
 	} finally {
-		btn.classList.remove(qual(`pending`));};
+		btn.classList.remove(galk.pending);};
 
 	if (info === null) {
 		return;};
@@ -887,7 +899,7 @@ const primeNavigationButton = async function(state, doc, btn, direction) {
 		{...state, currentPostId : info.postId},
 		doc.location.href);
 
-	btn.classList.add(qual(`ready`));
+	btn.classList.add(galk.ready);
 };
 
 const bindThumbnailsList = function(state, doc, scopeElem) {
@@ -905,12 +917,12 @@ const bindThumbnail = function(state, doc, thumb) {
 	if (info === null) {
 		return;};
 
-	thumb.classList.toggle(qual(`selected`),
+	thumb.classList.toggle(galk.selected,
 		info.postId === state.currentPostId);
 
 	let ovr = ensureThumbnailOverlay(state, doc, thumb, info);
 	if (ovr !== null) {
-		let inLink = enforce(getSingleElemByClass(ovr, qual('thumb-in-link')));
+		let inLink = enforce(getSingleElemByClass(ovr, galk['thumb-in-link']));
 
 		inLink.href = stateAsFragment(
 			{...state,
@@ -927,21 +939,21 @@ const ensureThumbnailOverlay = function(state, doc, thumb, info) {
 	dbg && assert(typeof info === `object`);
 	dbg && assert(isPostId(info.postId));
 
-	let ovr = getSingleElemByClass(thumb, qual(`thumb-overlay`));
+	let ovr = getSingleElemByClass(thumb, galk['thumb-overlay']);
 	if (ovr !== null) {
 		return ovr;};
 
-	ovr = doc.createElement(`div`);
-	ovr.classList.add(qual(`thumb-overlay`));
-	ovr.classList.add(qual(`thumb-overlay-${info.postId}`));
+	ovr = doc.createElement(`nav`);
+	ovr.classList.add(galk['thumb-overlay']);
+	ovr.classList.add(galk[`thumb-overlay-${info.postId}`]);
 
 	let title = thumbnailTitle(state, thumb);
 
 	ovr.insertAdjacentHTML(`beforeend`,
-		`<a class='${qual('thumb-ex-link')}'
+		`<a class='${galk['thumb-ex-link']}'
 			title='${xmlEscape(title)}'
 			href='${xmlEscape(info.url.href)}'></a>
-		<a class='${qual('thumb-in-link')}'
+		<a class='${galk['thumb-in-link']}'
 			title='${xmlEscape(title)}' href='#)}'></a>`);
 
 	thumb.prepend(ovr);
@@ -953,8 +965,8 @@ const ensureInlineView = function(state, doc, parentElem) {
 	let ivPanel = getInlineView(state, parentElem);
 
 	if (parentElem !== null && ivPanel === null) {
-		ivPanel = doc.createElement(`div`);
-		ivPanel.classList.add(qual(`iv-panel`));
+		ivPanel = doc.createElement(`section`);
+		ivPanel.classList.add(galk['iv-panel']);
 		parentElem.append(ivPanel);
 	};
 
@@ -963,10 +975,10 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 const getInlineView = function(state, parentElem) {
 	let ivPanel = null;
-	if (parentElem instanceof Element) {
-		ivPanel = getSingleElemByClass(parentElem, qual(`iv-panel`));};
+	if (parentElem instanceof HTMLElement) {
+		ivPanel = getSingleElemByClass(parentElem, galk['iv-panel']);};
 
-	if (!(ivPanel instanceof HTMLDivElement)) {
+	if (!(ivPanel instanceof HTMLElement)) {
 		return null;};
 
 	return ivPanel;
@@ -1063,6 +1075,10 @@ const searchExprContainsOrderTerm = function(state, searchExpr) {
 	return false;
 };
 
+const parseSearchExpr = function(state, expr) {
+	//return {terms, order};
+};
+
 const getThumbClass = function({name}) {
 	dbg && assert(typeof name === `string`);
 
@@ -1075,11 +1091,11 @@ const ensureForwardDanbooruTooltipEvents = function(state, doc) {
 	dbg && assert(doc instanceof HTMLDocument);
 	enforce(doc.body instanceof HTMLBodyElement, `<body> element missing`);
 
-	if (doc.getElementById(qual(`forward-tooltip-events`)) !== null) {
+	if (doc.getElementById(galk['forward-tooltip-events']) !== null) {
 		return;};
 
 	let scriptEl = doc.createElement(`script`);
-	scriptEl.id = qual(`forward-tooltip-events`);
+	scriptEl.id = galk['forward-tooltip-events'];
 	scriptEl.textContent = getForwardDanbooruTooltipEventsScriptText;
 	doc.body.append(scriptEl);
 };
@@ -1088,7 +1104,7 @@ const getForwardDanbooruTooltipEventsScriptText = `{
 	/* refer to danbooru/app/javascript/src/javascripts/post_tooltips.js */
 
 	let onEvent = function(ev) {
-		let ovr = ev.target.closest('.${qual('thumb-overlay')}');
+		let ovr = ev.target.closest('.${galk['thumb-overlay']}');
 		if (ovr === null) {
 			return;};
 
@@ -1160,32 +1176,31 @@ const tryGetPostInfo = async function(state, postId) {
 	info = null;
 
 	let requUrl = requestPostInfoUrl(state, postId);
-	let resp = await tryHttpGet(requUrl);
-	if (resp === null) {
-		reportInvalidResponse(requUrl.href, resp);
+	let xhr = await tryApiRequ(state, requUrl);
+	if (xhr === null) {
+		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
 	switch (getDomain(state).kind) {
 		case `danbooru` :
-			let respObj = tryParseJson(resp.responseText);
 			try {
-				info = singlePostInfoFromDanbooruApiPostsList(state, respObj);
+				info = singlePostInfoFromDanbooruApiPostsList(
+					state, xhr.response);
 			} catch (_) {
-				reportInvalidResponse(requUrl.href, resp);
+				reportInvalidResponse(requUrl.href, xhr);
 				return null;};
 			break;
 
 		case `gelbooru` :
-			let xml = httpResponseAsXml(resp);
-			if (!(xml instanceof Document)) {
-				reportInvalidResponse(requUrl.href, resp);
+			if (!(xhr.responseXML instanceof Document)) {
+				reportInvalidResponse(requUrl.href, xhr);
 				return null;};
 
 			try {
 				info = singlePostInfoFromGelbooruApiPostsElem(
-					state, xml.documentElement);
+					state, xhr.responseXML.documentElement);
 			} catch (_) {
-				reportInvalidResponse(requUrl.href, resp);
+				reportInvalidResponse(requUrl.href, xhr);
 				return null;};
 			break;
 
@@ -1197,7 +1212,7 @@ const tryGetPostInfo = async function(state, postId) {
 		return null;};
 
 	if (info.postId !== postId) {
-		reportInvalidResponse(requUrl.href, resp);
+		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
 	postInfoTbl.set(postId, info);
@@ -1216,34 +1231,32 @@ const tryGetPostNotes = async function(state, postId) {
 		return notes;};
 
 	let requUrl = requestPostNotesUrl(state, postId);
-	let resp = await tryHttpGet(requUrl);
-	if (resp === null) {
-		reportInvalidResponse(requUrl.href, resp);
+	let xhr = await tryApiRequ(state, requUrl);
+	if (xhr === null) {
+		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
 	notes = null;
 	switch (getDomain(state).kind) {
 		case `danbooru` :
-			let respObj = tryParseJson(resp.responseText);
 			try {
 				notes = postNotesFromDanbooruApiNotesList(
-					state, postId, respObj);
+					state, postId, xhr.response);
 			} catch (_) {
-				reportInvalidResponse(requUrl.href, resp);
+				reportInvalidResponse(requUrl.href, xhr);
 				return null;};
 			break;
 
 		case `gelbooru` :
-			let xml = httpResponseAsXml(resp);
-			if (!(xml instanceof Document)) {
-				reportInvalidResponse(requUrl.href, resp);
+			if (!(xhr.responseXML instanceof Document)) {
+				reportInvalidResponse(requUrl.href, xhr);
 				return null;};
 
 			try {
 				notes = postNotesFromGelbooruApiNotesElem(
-					state, postId, xml.documentElement);
+					state, postId, xhr.responseXML.documentElement);
 			} catch (_) {
-				reportInvalidResponse(requUrl.href, resp);
+				reportInvalidResponse(requUrl.href, xhr);
 				return null;};
 			break;
 
@@ -1252,7 +1265,7 @@ const tryGetPostNotes = async function(state, postId) {
 	};
 
 	if (!Array.isArray(notes)) {
-		reportInvalidResponse(requUrl.href, resp);
+		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
 	ephemeralCacheAssign(notesCache, postId, notes);
@@ -1283,33 +1296,31 @@ const tryNavigatePostInfo = async function(
 			return info;};
 	};
 
-	let resp = await tryHttpGet(requUrl);
-	if (resp === null) {
-		reportInvalidResponse(requUrl.href, resp);
+	let xhr = await tryApiRequ(state, requUrl);
+	if (xhr === null) {
+		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
 	let info = null;
 	switch (getDomain(state).kind) {
 		case `danbooru` :
-			let respObj = tryParseJson(resp.responseText);
 			try {
-				info = singlePostInfoFromDanbooruApiPostsList(state, respObj);
+				info = singlePostInfoFromDanbooruApiPostsList(
+					state, resp.response);
 			} catch (_) {
-				reportInvalidResponse(requUrl.href, resp);
+				reportInvalidResponse(requUrl.href, xhr);
 				return null;};
 			break;
 
 		case `gelbooru` :
-			let xml = httpResponseAsXml(resp);
-			if (!(xml instanceof Document)) {
+			if (!(xhr.responseXML instanceof Document)) {
 				reportInvalidResponse(requUrl.href, resp);
 				return null;};
-
 			try {
 				info = singlePostInfoFromGelbooruApiPostsElem(
-					state, xml.documentElement);
+					state, xhr.responseXML.documentElement);
 			} catch (_) {
-				reportInvalidResponse(requUrl.href, resp);
+				reportInvalidResponse(requUrl.href, xhr);
 				return null;};
 			break;
 
@@ -1326,7 +1337,7 @@ const tryNavigatePostInfo = async function(
 		: info.postId <= fromPostId)
 	{
 		/* result takes us in the wrong direction */
-		reportInvalidResponse(requUrl.href, resp);
+		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
 	postInfoTbl.set(info.postId, info);
@@ -1509,12 +1520,12 @@ const getMediaType = function(href) {
 	return type;
 };
 
-const reportInvalidResponse = function(href, resp) {
+const reportInvalidResponse = function(href, xhr) {
 	dbg && assert(typeof href === `string`);
-	dbg && assert(typeof resp === `object`);
+	dbg && assert(typeof xhr === `object`);
 
 	logError(`api request "${href}" returned invalid response:`,
-		resp === null ? `(null)` : resp.responseText);
+		xhr === null ? `(null)` : xhr.responseText);
 };
 
 /* --- urls --- */
@@ -1954,12 +1965,14 @@ const postPageUrl = function(state, postId) {
 
 /* --- utilities --- */
 
-const gmXmlHttpRequest =
-	typeof GM_xmlhttpRequest === `function` ? GM_xmlhttpRequest
-	: typeof GM !== `undefined` ? GM.xmlHttpRequest /* greasemonkey 4 */
-	: null;
-
 const requestTimeoutMs = 10000;
+
+const tryApiRequ = async function(state, url) {
+	return await tryHttpGet(url,
+		getDomain(state).kind === `danbooru`
+			? `json`
+			: `document`);
+};
 
 const tryHttpGet = async function(...args) {
 	try {
@@ -1969,67 +1982,36 @@ const tryHttpGet = async function(...args) {
 		return null;};
 };
 
-const httpGet = function(url) {
+const httpGet = function(url, responseType) {
 	dbg && assert(url instanceof URL);
+	dbg && assert(typeof responseType === `string`);
 
 	return new Promise((resolve, reject) => {
-		let onFailure = function(resp) {
+		let onFailure = function() {
 			return reject(new Error(
 				`GET request "${url.href}" failed with status `
-				+`"${resp.statusText}"`));
+				+`"${this.statusText}"`));
 		};
 
-		let onSuccess = function(resp) {
-			dbg && assert(typeof resp === `object` && resp !== null);
-			if (resp.status === 200) {
-				return resolve(resp);
+		let onSuccess = function() {
+			if (this.status === 200) {
+				return resolve(this);
 			} else {
-				return onFailure(resp);};
+				return onFailure.call(this);};
 		};
 
-		gmXmlHttpRequest({
-			method : `GET`,
-			url : url.href,
+		let xhr = Object.assign(new XMLHttpRequest, {
+			responseType,
 			timeout : requestTimeoutMs,
 			onload : onSuccess,
 			onabort : onFailure,
 			onerror : onFailure,
 			ontimeout : onFailure,});
+
+		xhr.open(`GET`, url.href);
+		xhr.send();
 	});
 };
-
-const httpResponseAsXml = function(resp) {
-	/* resp.responseXML is not always available */
-
-	if (typeof resp !== `object`) {
-		return null;};
-
-	let xml = resp.responseXML;
-
-	if (typeof xml === `object`) {
-		return xml instanceof Document ? xml : null;};
-
-	return tryParseXml(resp.responseText);
-};
-
-runtime === `browser` && test(_ => {
-	let src = `<asdf/>`;
-	let badSrc = `>as/df<`;
-	let doc = (new DOMParser).parseFromString(src, `application/xml`);
-	let f = httpResponseAsXml;
-
-	assert(f({}) === null);
-
-	assert(f({responseXML : null, responseText : src}) === null);
-	assert(f({responseXML : doc, responseText : src}) === doc);
-	assert(f({responseXML : doc, responseText : badSrc}) === doc);
-	assert(f({responseXML : {}, responseText : src}) === null);
-	assert(f({responseXML : src}) === null);
-
-	assert(f({responseText : doc}) === null);
-	assert(f({responseText : src}).documentElement.tagName === `asdf`);
-	assert(f({responseText : badSrc}) === null);
-});
 
 const getSingleElemByClass = function(scopeElem, className) {
 	dbg && assert(typeof className === `string`);
@@ -2352,7 +2334,7 @@ const ensureApplyGlobalStyleRules = function(state, doc, getRules) {
 	dbg && assert(doc instanceof HTMLDocument);
 	enforce(doc.head instanceof HTMLHeadElement, `<head> element mising`);
 
-	if (doc.getElementById(qual(`global-stylesheet`))
+	if (doc.getElementById(galk.globalStylesheet)
 		instanceof HTMLStyleElement)
 	{
 		log(`global stylesheet already applied`);
@@ -2361,12 +2343,14 @@ const ensureApplyGlobalStyleRules = function(state, doc, getRules) {
 
 	let root = document.documentElement;
 	let domain = getDomain(state);
-	root.classList.add(qual(`domain-${domain.name}`));
-	root.classList.add(qual(`domain-kind-${domain.kind}`));
-	root.classList.add(qual(`theme-${getInlineViewTheme(domain, doc)}`));
+	root.classList.add(galk[`domain-name-${domain.name}`]);
+	root.classList.add(galk[`domain-kind-${domain.kind}`]);
+	if (domain.subkind !== undefined) {
+		root.classList.add(galk[`domain-subkind-${domain.subkind}`]);};
+	root.classList.add(galk[`theme-${getInlineViewTheme(domain, doc)}`]);
 
 	let style = doc.createElement(`style`);
-	style.id = qual(`global-stylesheet`);
+	style.id = galk.globalStylesheet;
 	doc.head.appendChild(style);
 
 	for (let rule of getRules()) {
@@ -2415,28 +2399,28 @@ const getGlobalStyleRules = function(domain) {
 		/* --- vars --- */
 
 		`:root {
-			--${qual('c-iv-bg')} : hsl(232, 17%, 46%);
-			--${qual('r-iv-inact-opacity')} : 0.6;
-			--${qual('c-iv-action')} : hsl(33, 100%, 70%);
-			--${qual('c-ex-link')} : hsl(233, 100%, 75%);
-			--${qual('c-note-bg')} : hsla(60, 100%, 96.7%, 0.3);
-			--${qual('c-note-border')} : hsla(0, 0%, 0%, 0.3);
-			--${qual('c-note-caption')} : hsla(0, 0%, 10%, 1);
-			--${qual('c-note-caption-bg')} : hsla(60, 100%, 96.7%, 0.95);
-			--${qual('d-iv-width')} : 185mm;
+			--${galk['c-iv-bg']} : hsl(232, 17%, 46%);
+			--${galk['r-iv-inact-opacity']} : 0.6;
+			--${galk['c-iv-action']} : hsl(33, 100%, 70%);
+			--${galk['c-ex-link']} : hsl(233, 100%, 75%);
+			--${galk['c-note-bg']} : hsla(60, 100%, 96.7%, 0.3);
+			--${galk['c-note-border']} : hsla(0, 0%, 0%, 0.3);
+			--${galk['c-note-caption']} : hsla(0, 0%, 10%, 1);
+			--${galk['c-note-caption-bg']} : hsla(60, 100%, 96.7%, 0.95);
+			--${galk['d-iv-width']} : 185mm;
 		}`,
 
-		`:root.${qual('theme-dark')} {
-			--${qual('c-base')} : hsla(0, 0%, 30%, 0.5);
+		`:root.${galk['theme-dark']} {
+			--${galk['c-base']} : hsla(0, 0%, 30%, 0.5);
 		}`,
 
-		`:root.${qual('theme-light')} {
-			--${qual('c-base')} : hsla(0, 0%, 100%, 0.5);
+		`:root.${galk['theme-light']} {
+			--${galk['c-base']} : hsla(0, 0%, 100%, 0.5);
 		}`,
 
 		/* --- inline view --- */
 
-		`.${qual('iv-panel')} {
+		`.${galk['iv-panel']} {
 			display : flex;
 			flex-direction : column;
 			align-items : center;
@@ -2444,144 +2428,144 @@ const getGlobalStyleRules = function(domain) {
 			min-height : calc(74mm + 50vh);
 		}`,
 
-		`.${qual('iv-header')}, .${qual('iv-footer')} {
+		`.${galk['iv-header']}, .${galk['iv-footer']} {
 			max-width : 100vw;
-			width : var(--${qual('d-iv-width')});
+			width : var(--${galk['d-iv-width']});
 			min-height : 11mm;
 		}`,
 
-		`.${qual('iv-header')} > *,
-		.${qual('iv-footer')} > *
+		`.${galk['iv-header']} > *,
+		.${galk['iv-footer']} > *
 		{
-			background-color : var(--${qual('c-base')});
-			opacity : var(--${qual('r-iv-inact-opacity')});
+			background-color : var(--${galk['c-base']});
+			opacity : var(--${galk['r-iv-inact-opacity']});
 		}`,
 
-		`.${qual('iv-content-panel')} {
+		`.${galk['iv-content-panel']} {
 			display : flex;
 			align-items : center;
 			max-width : 100%; /* make extra-wide images overflow to the right */
 			min-height : 37mm;
 		}`,
 
-		`.${qual('iv-content-stack')} {
+		`.${galk['iv-content-stack']} {
 			display : grid;
 			justify-items : center;
 			align-items : center;
 		}`,
 
-		`.${qual('iv-content-stack')} > * {
+		`.${galk['iv-content-stack']} > * {
 			grid-column : 1;
 			grid-row : 1;
 		}`,
 
-		`.${qual('iv-content-stack')} > [hidden] {
+		`.${galk['iv-content-stack']} > [hidden] {
 			display : none; /* necessary due to 'reset' stylesheets */
 		}`,
 
-		`.${qual('iv-content-stack')}.${qual('scale-fit')} {
+		`.${galk['iv-content-stack']}.${galk['scale-fit']} {
 			max-width : 100vw;
 		}`,
 
-		`.${qual('iv-content-stack')}.${qual('scale-fit')} > * {
+		`.${galk['iv-content-stack']}.${galk['scale-fit']} > * {
 			max-width : 100%;
 			max-height : 100vh;
 		}`,
 
-		`.${qual('iv-content-stack')} > .${qual('media')} {
+		`.${galk['iv-content-stack']} > .${galk.media} {
 			z-index : 2;
 		}`,
 
-		`.${qual('iv-content-stack')} > .${qual('media-sample')} {
+		`.${galk['iv-content-stack']} > .${galk['media-sample']} {
 			z-index : 1;
 		}`,
 
-		`.${qual('iv-content-stack')} > .${qual('media-thumbnail')} {
+		`.${galk['iv-content-stack']} > .${galk['media-thumbnail']} {
 			z-index : 0;
 			opacity : 0.5;
 			filter : blur(1.32mm);
 		}`,
 
-		`.${qual('iv-content-stack')} > .${qual('media-sample')},
-		.${qual('iv-content-stack')} > .${qual('media-thumbnail')}
+		`.${galk['iv-content-stack']} > .${galk['media-sample']},
+		.${galk['iv-content-stack']} > .${galk['media-thumbnail']}
 		{
 			width : auto;
 			height : 100%;
 		}`,
 
-		`.${qual('iv-content-stack')} > .${qual('media-unavailable')} {
+		`.${galk['iv-content-stack']} > .${galk['media-unavailable']} {
 			margin : 0;
-			width : var(--${qual('d-iv-width')});
+			width : var(--${galk['d-iv-width']});
 			height : 74mm;
-			background-color : var(--${qual('c-iv-bg')});
+			background-color : var(--${galk['c-iv-bg']});
 			background-size : 70%;
 			background-repeat : no-repeat;
 			background-position : center;
 			opacity : 0.75;
 		}`,
 
-		`.${qual('iv-content-stack')} > .${qual('note-overlay')} {
+		`.${galk['iv-content-stack']} > .${galk['note-overlay']} {
 			z-index : 3;
 			width : 100%;
 			height : 100%;
 		}`,
 
-		`.${qual('note-overlay')} {
+		`.${galk['note-overlay']} {
 			position : relative;
 			/* don't obstruct interaction with underlying elements: */
 			visibility : hidden;
 		}`,
 
-		`.${qual('note-overlay')} > figure {
+		`.${galk['note-overlay']} > figure {
 			position : absolute;
 			visibility : visible;
 			margin : 0;
 			z-index : 0;
-			background : var(--${qual('c-note-bg')});
+			background : var(--${galk['c-note-bg']});
 		}`,
 
-		`.${qual('note-overlay')} > figure,
-		.${qual('note-overlay')} > figure > figcaption
+		`.${galk['note-overlay']} > figure,
+		.${galk['note-overlay']} > figure > figcaption
 		{
 			border-style : solid;
 			border-width : 1px;
-			border-color : var(--${qual('c-note-border')});
+			border-color : var(--${galk['c-note-border']});
 		}`,
 
-		`.${qual('iv-panel')}:not(.${qual('notes-visible')})
-			.${qual('note-overlay')} > figure
+		`.${galk['iv-panel']}:not(.${galk['notes-visible']})
+			.${galk['note-overlay']} > figure
 		{
 			display : none;
 		}`,
 
-		`.${qual('note-overlay')} > figure > figcaption {
+		`.${galk['note-overlay']} > figure > figcaption {
 			visibility : hidden;
 			position : absolute;
 			padding : 1mm;
 			top : calc(100% + 1.85mm);
-			border-color : var(--${qual('c-note-caption')});
-			color : var(--${qual('c-note-caption')});
-			background : var(--${qual('c-note-caption-bg')});
+			border-color : var(--${galk['c-note-caption']});
+			color : var(--${galk['c-note-caption']});
+			background : var(--${galk['c-note-caption-bg']});
 		}`,
 
-		`.${qual('note-overlay')} > figure:hover {
+		`.${galk['note-overlay']} > figure:hover {
 			z-index : 1;
 		}`,
 
-		`.${qual('note-overlay')} > figure:hover > figcaption {
+		`.${galk['note-overlay']} > figure:hover > figcaption {
 			visibility : visible;
 		}`,
 
 		/* --- controls --- */
 
-		`.${qual('iv-ctrls')} {
+		`.${galk['iv-ctrls']} {
 			display : flex;
 			flex-direction : row;
 			align-items : stretch;
 			justify-content : center;
 		}`,
 
-		`.${qual('iv-ctrls')} > * {
+		`.${galk['iv-ctrls']} > * {
 			/* equal sizes: */
 			flex-basis : 0;
 			flex-grow : 1;
@@ -2592,14 +2576,14 @@ const getGlobalStyleRules = function(domain) {
 			justify-content : center;
 		}`,
 
-		`.${qual('iv-ctrls')} > a:hover,
-		.${qual('iv-panel')}.${qual('notes-visible')}
-			.${qual('iv-ctrls')} > .${qual(`notes`)}
+		`.${galk['iv-ctrls']} > a:hover,
+		.${galk['iv-panel']}.${galk['notes-visible']}
+			.${galk['iv-ctrls']} > .${galk.notes}
 		{
 			opacity : 1;
 		}`,
 
-		`.${qual('iv-ctrls')} > * > .${qual('btn-icon')} {
+		`.${galk['iv-ctrls']} > * > .${galk['btn-icon']} {
 			margin : 0;
 			width : 7.4mm;
 			height : 7.4mm;
@@ -2607,67 +2591,67 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgHref(svgCircleRing)});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('scale')}.${qual('full')}
-			> .${qual('btn-icon')}
+		`.${galk['iv-ctrls']} > .${galk.scale}.${galk.full}
+			> .${galk['btn-icon']}
 		{
 			background-image : url(${svgHref(svgCircleExpand)});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('scale')}.${qual('fit')}
-			> .${qual('btn-icon')}
+		`.${galk['iv-ctrls']} > .${galk.scale}.${galk.fit}
+			> .${galk['btn-icon']}
 		{
 			background-image : url(${svgHref(svgCircleContract)});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('prev')}.${qual('ready')}
-			> .${qual('btn-icon')}
+		`.${galk['iv-ctrls']} > .${galk.prev}.${galk.ready}
+			> .${galk['btn-icon']}
 		{
 			background-image : url(${svgCircleArrowRightHref});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('ex')}:hover {
-			background-color : var(--${qual('c-ex-link')});
+		`.${galk['iv-ctrls']} > .${galk.ex}:hover {
+			background-color : var(--${galk['c-ex-link']});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('ex')} > .${qual('btn-icon')} {
+		`.${galk['iv-ctrls']} > .${galk.ex} > .${galk['btn-icon']} {
 			background-image : url(${svgHref(svgCircleLink)});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('next')}.${qual('ready')}
-			> .${qual('btn-icon')}
+		`.${galk['iv-ctrls']} > .${galk.next}.${galk.ready}
+			> .${galk['btn-icon']}
 		{
 			background-image : url(${svgCircleArrowLeftHref});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('close')}:hover {
-			background-color : var(--${qual('c-iv-action')});
+		`.${galk['iv-ctrls']} > .${galk.close}:hover {
+			background-color : var(--${galk['c-iv-action']});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('close')} > .${qual('btn-icon')} {
+		`.${galk['iv-ctrls']} > .${galk.close} > .${galk['btn-icon']} {
 			background-image : url(${svgCircleArrowUpHref});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('notes')} > .${qual('btn-icon')} {
+		`.${galk['iv-ctrls']} > .${galk.notes} > .${galk['btn-icon']} {
 			background-image : url(${svgHref(svgCircleNote)});
 		}`,
 
-		`.${qual('iv-panel')}:not(.${qual('notes-visible')})
-			.${qual('iv-ctrls')} > .${qual('notes')}:hover
-			> .${qual('btn-icon')}
+		`.${galk['iv-panel']}:not(.${galk['notes-visible']})
+			.${galk['iv-ctrls']} > .${galk.notes}:hover
+			> .${galk['btn-icon']}
 		{
-			opacity : var(--${qual('r-iv-inact-opacity')});
+			opacity : var(--${galk['r-iv-inact-opacity']});
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('pending')},
-		.${qual('iv-ctrls')} > .${qual('disabled')}
+		`.${galk['iv-ctrls']} > .${galk.pending},
+		.${galk['iv-ctrls']} > .${galk.disabled}
 		{
 			pointer-events : none;
 		}`,
 
-		`.${qual('iv-ctrls')} > .${qual('prev')}.${qual('pending')}
-			> .${qual('btn-icon')},
-		.${qual('iv-ctrls')} > .${qual('next')}.${qual('pending')}
-			> .${qual('btn-icon')}
+		`.${galk['iv-ctrls']} > .${galk.prev}.${galk.pending}
+			> .${galk['btn-icon']},
+		.${galk['iv-ctrls']} > .${galk.next}.${galk.pending}
+			> .${galk['btn-icon']}
 		{
 			background-image : url(${svgHref(svgCircleSpinner)});
 			${spinnerStyleRules}
@@ -2686,16 +2670,16 @@ const getGlobalStyleRules = function(domain) {
 			justify-content : center;
 		}`,
 
-		`:root.${qual('domain-yandere')} .${thumbClass} {
+		`:root.${galk['domain-yandere']} .${thumbClass} {
 			display : flex !important; /* thumbnails nested in <li> */
 		}`,
 
-		`:root.${qual('domain-e621')} .${thumbClass} > .post-score {
+		`:root.${galk['domain-e621']} .${thumbClass} > .post-score {
 			margin-top : unset !important;
 			margin-bottom : unset !important;
 		}`,
 
-		`.${thumbClass} > .${qual('thumb-overlay')} {
+		`.${thumbClass} > .${galk['thumb-overlay']} {
 			display : flex;
 			flex-direction : column;
 			position : absolute;
@@ -2704,57 +2688,53 @@ const getGlobalStyleRules = function(domain) {
 			left : 0;
 			bottom : 0;
 			right : 0;
-
-			/* some sites (e.g. safebooru) set a default background
-			colour for generic elements (e.g. <div>) */
-			background-color : transparent;
 		}`,
 
-		`.${thumbClass} > .${qual('thumb-overlay')} > * {
+		`.${thumbClass} > .${galk['thumb-overlay']} > * {
 			display : block;
 			flex-grow : 1;
 		}`,
 
-		`.${thumbClass} > .${qual('thumb-overlay')} > a {
+		`.${thumbClass} > .${galk['thumb-overlay']} > a {
 			background-position : center;
 			background-repeat : no-repeat;
 			background-size : 30%;
 			opacity : 0.7;
 		}`,
 
-		`.${thumbClass} > .${qual('thumb-overlay')}
-			> a.${qual('thumb-ex-link')}:hover
+		`.${thumbClass} > .${galk['thumb-overlay']}
+			> a.${galk['thumb-ex-link']}:hover
 		{
 			background-image : url(${svgHref(svgCircleLink)});
-			background-color : var(--${qual('c-ex-link')});
+			background-color : var(--${galk['c-ex-link']});
 		}`,
 
-		`.${thumbClass} > .${qual('thumb-overlay')}
-			> a.${qual('thumb-in-link')}:hover,
-		.${thumbClass}.${qual('selected')} > .${qual('thumb-overlay')}
-			> a.${qual('thumb-in-link')}
+		`.${thumbClass} > .${galk['thumb-overlay']}
+			> a.${galk['thumb-in-link']}:hover,
+		.${thumbClass}.${galk.selected} > .${galk['thumb-overlay']}
+			> a.${galk['thumb-in-link']}
 		{
 			background-image : url(${svgCircleArrowDownHref});
-			background-color : var(--${qual('c-iv-action')});
+			background-color : var(--${galk['c-iv-action']});
 		}`,
 
-		`.${thumbClass}.${qual('selected')} > .${qual('thumb-overlay')}
-			> a.${qual('thumb-in-link')}:hover
+		`.${thumbClass}.${galk.selected} > .${galk['thumb-overlay']}
+			> a.${galk['thumb-in-link']}:hover
 		{
 			background-image : url(${svgCircleArrowUpHref});
 		}`,
 
 		/* --- animation --- */
 
-		`.${qual('animate-to-hidden')} {
-			animation-name : ${qual('to-hidden')};
+		`.${galk['animate-to-hidden']} {
+			animation-name : ${galk['to-hidden']};
 			animation-iteration-count : 1;
 			animation-duration : 0.2s;
 			animation-timing-function : linear;
 			animation-fill-mode : forwards;
 		}`,
 
-		`@keyframes ${qual('to-hidden')} {
+		`@keyframes ${galk['to-hidden']} {
 			from {}
 			to {
 				visibility : hidden;
@@ -2762,14 +2742,16 @@ const getGlobalStyleRules = function(domain) {
 			}
 		}`,
 
-		`@keyframes ${qual('rotate')} {
+		`@keyframes ${galk.rotate} {
 			from {}
 			to {transform : rotate(1.0turn);}
 		}`,
 
 		/* --- miscellaneous --- */
 
-		`:root.${qual('domain-r34xxx')}, :root.${qual('domain-r34xxx')} > body {
+		`:root.${galk['domain-name-r34xxx']},
+		:root.${galk['domain-name-r34xxx']} > body
+		{
 			/* remove style on rule34's mobile layout which causes full-size
 			images to be cropped: */
 			overflow-x : unset;
@@ -2778,7 +2760,7 @@ const getGlobalStyleRules = function(domain) {
 };
 
 const spinnerStyleRules =
-	`animation-name : ${qual('rotate')};
+	`animation-name : ${galk.rotate};
 	animation-iteration-count : infinite;
 	animation-duration : 0.36s;
 	animation-timing-function : linear;`;
