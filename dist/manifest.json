@@ -1,10 +1,11 @@
 {
 	"manifest_version": 2,
 	"name": "Galkontinuum",
-	"version": "2019.04.18",
 	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
+	"version": "2019.04.18",
+	"version_name": "2019.04.18 (fe221d52bf812482804b8d5650887321a81ff8df)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [

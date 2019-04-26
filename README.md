@@ -32,13 +32,15 @@ into a new directory.
 
 ## Limitations
 
+- Markup is not supported in note text.
+
 - On Gelbooru-based sites, posts added within the last few minutes may fail to
 load due to the search database being out of sync with the main database.
-
-- Posts with an ID less than zero or greater than 2147483647 will not be
-recognised. It is unknown whether there are any boorus with IDs outside this
-range.
 
 - On Danbooru-based sites, it is suspected that only up to 1000 notes will be
 shown on any single post. It is unknown whether there are any posts with over
 1000 notes.
+
+- Posts with an ID less than zero or greater than 2147483647 will not be
+recognised. It is unknown whether there are any boorus with IDs outside this
+range.
