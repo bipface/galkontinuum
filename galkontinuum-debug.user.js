@@ -296,7 +296,7 @@ const nodejsEntrypoint = async function(command, argJson) {
 	enforce(typeof process.mainModule === `object`);
 	let selfFilePath = process.mainModule.filename;
 
-	let reflectLines = async function() {
+	let reflectLines = function() {
 		return readline.createInterface({
 			input : fs.createReadStream(selfFilePath),
 			crlfDelay : Infinity,});
