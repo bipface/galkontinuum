@@ -22,13 +22,11 @@
 
 const getReadmeMarkdown = (manif, {downloadHref}) =>
 `# Galkontinuum
-Galkontinuum is a [userscript][1] which enables slideshow-style browsing of
-search results on the Booru family of sites.
+Galkontinuum is a [userscript][wiki userscript] which enables slideshow-style
+browsing of search results on the Booru family of sites.
 
 It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
 compatible forks such as e621 and Moebooru.
-
-[1]: https://en.wikipedia.org/wiki/Userscript
 
 ## Installation
 
@@ -41,29 +39,26 @@ Support for other browsers may be considered if requested.
 
 ### Userscript manager
 
-1. Install a userscript manager such as [Greasemonkey][2] or [Tampermonkey][3].
+1. Install a userscript manager such as [Greasemonkey][greasemonkey] or
+[Tampermonkey][tampermonkey].
 
-2. Visit [dist/galkontinuum.user.js][1].
+2. Visit [dist/galkontinuum.user.js][dist galk].
 You should be presented with an installation prompt.
 
 ### Chrome - standalone extension (Windows)
 
 Be aware that the script will not update automatically when installed this way.
 
-1. Download the files [dist/galkontinuum.user.js][1] and \`dist/manifest.json\`
-into a new directory.
+1. Download the files [dist/galkontinuum.user.js][dist galk] and
+[dist/manifest.json][dist manif] into a new directory.
 
 2. Visit \`chrome://extensions\`.
 
 3. Enable the **Developer mode** option and choose **Load unpacked**.
-![Load unpacked](https://i.imgur.com/RDu11ts.png)
+![Load unpacked][chrome load unpacked]
 
 4. Select the directory containing the downloaded files.
-![Select Folder](https://i.imgur.com/mvJnMHQ.png)
-
-[1]: ${downloadHref}
-[2]: https://www.greasespot.net/
-[3]: https://tampermonkey.net/
+![Select Folder][chrome select folder]
 
 ## Limitations
 
@@ -79,6 +74,14 @@ shown on any single post. It is unknown whether there are any posts with over
 - Posts with an ID less than zero or greater than 2147483647 will not be
 recognised. It is unknown whether there are any boorus with IDs outside this
 range.
+
+[dist galk]: ${downloadHref}
+[dist manif]: ${(new URL('manifest.json', downloadHref)).href}
+[wiki userscript]: https://en.wikipedia.org/wiki/Userscript
+[greasemonkey]: https://www.greasespot.net/
+[tampermonkey]: https://tampermonkey.net/
+[chrome load unpacked]: https://i.imgur.com/RDu11ts.png
+[chrome select folder]: https://i.imgur.com/mvJnMHQ.png
 `;
 
 /*
@@ -251,7 +254,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.04.18",
-	"version_name": "2019.04.18 (9416b86450d3ddb7b4e32279747e6c931a4f99f3)",
+	"version_name": "2019.04.18 (785d28765677908d0d2ae1a5e67cae0fa2fe0de6)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
