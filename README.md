@@ -15,20 +15,33 @@ compatible forks such as e621 and Moebooru.
 - Firefox 56 or newer.
 - Chrome 60 or newer.
 
+Support for other browsers may be considered if requested.
+
+### Userscript manager
+
+1. Install a userscript manager such as [Greasemonkey][2] or [Tampermonkey][3].
+
+2. Visit [dist/galkontinuum.user.js][1].
+You should be presented with an installation prompt.
+
 ### Chrome - standalone extension (Windows)
 
 Be aware that the script will not update automatically when installed this way.
 
-1. Download the files `dist/galkontinuum.user.js` and `dist/manifest.json`
+1. Download the files [dist/galkontinuum.user.js][1] and `dist/manifest.json`
 into a new directory.
 
-2. Go to `chrome://extensions`.
+2. Visit `chrome://extensions`.
 
 3. Enable the **Developer mode** option and choose **Load unpacked**.
 ![Load unpacked](https://i.imgur.com/RDu11ts.png)
 
 4. Select the directory containing the downloaded files.
 ![Select Folder](https://i.imgur.com/mvJnMHQ.png)
+
+[1]: https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
+[2]: https://www.greasespot.net/
+[3]: https://tampermonkey.net/
 
 ## Limitations
 

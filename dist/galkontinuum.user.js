@@ -20,7 +20,7 @@
 
 'use strict';
 
-const readmeMarkdown =
+const getReadmeMarkdown = (manif, {downloadHref}) =>
 `# Galkontinuum
 Galkontinuum is a [userscript][1] which enables slideshow-style browsing of
 search results on the Booru family of sites.
@@ -37,20 +37,33 @@ compatible forks such as e621 and Moebooru.
 - Firefox 56 or newer.
 - Chrome 60 or newer.
 
+Support for other browsers may be considered if requested.
+
+### Userscript manager
+
+1. Install a userscript manager such as [Greasemonkey][2] or [Tampermonkey][3].
+
+2. Visit [dist/galkontinuum.user.js][1].
+You should be presented with an installation prompt.
+
 ### Chrome - standalone extension (Windows)
 
 Be aware that the script will not update automatically when installed this way.
 
-1. Download the files \`dist/galkontinuum.user.js\` and \`dist/manifest.json\`
+1. Download the files [dist/galkontinuum.user.js][1] and \`dist/manifest.json\`
 into a new directory.
 
-2. Go to \`chrome://extensions\`.
+2. Visit \`chrome://extensions\`.
 
 3. Enable the **Developer mode** option and choose **Load unpacked**.
 ![Load unpacked](https://i.imgur.com/RDu11ts.png)
 
 4. Select the directory containing the downloaded files.
 ![Select Folder](https://i.imgur.com/mvJnMHQ.png)
+
+[1]: ${downloadHref}
+[2]: https://www.greasespot.net/
+[3]: https://tampermonkey.net/
 
 ## Limitations
 
@@ -238,7 +251,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.04.18",
-	"version_name": "2019.04.18 (fe221d52bf812482804b8d5650887321a81ff8df)",
+	"version_name": "2019.04.18 (9416b86450d3ddb7b4e32279747e6c931a4f99f3)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -316,6 +329,18 @@ const nodejsEntrypoint = async function(command, argJson) {
 	enforce(typeof process.mainModule === `object`);
 	let selfFilePath = process.mainModule.filename;
 
+	let reflectLines = function() {
+		return readline.createInterface({
+			input : fs.createReadStream(selfFilePath),
+			crlfDelay : Infinity,});
+	};
+
+	let reflectManifest = async function() {
+		return await createManifest(reflectLines(), {
+			filename : path.basename(selfFilePath),
+			...arg});
+	};
+
 	switch (command) {
 		case undefined :
 		case `run-unittests` : {
@@ -327,7 +352,9 @@ const nodejsEntrypoint = async function(command, argJson) {
 		};
 
 		case `create-readme` : {
-			process.stdout.write(readmeMarkdown);
+			process.stdout.write(
+				getReadmeMarkdown(
+					await reflectManifest(), arg));
 			return;
 		};
 
@@ -342,22 +369,14 @@ const nodejsEntrypoint = async function(command, argJson) {
 
 			result is written to stdout */
 
-			let lines = readline.createInterface({
-				input : fs.createReadStream(selfFilePath),
-				crlfDelay : Infinity,});
+			let manif = await reflectManifest();
 
-			let manif = await createManifest(lines, {
-				filename : path.basename(selfFilePath),
-				...arg});
-
-			lines = readline.createInterface({
-				input : fs.createReadStream(selfFilePath),
-				crlfDelay : Infinity,});
+			let segs = createReleaseSegments(
+				reflectLines(), manif, arg);
 
 			/* note: `for await (…)` isn't supported in firefox 56 */
 
-			let outputXs = createReleaseSegments(lines, manif, arg);
-			for (let value, iter = outputXs[Symbol.asyncIterator]();
+			for (let value, iter = segs[Symbol.asyncIterator]();
 				!({value} = await iter.next()).done;)
 			{
 				process.stdout.write(value+`\n`);
@@ -376,13 +395,7 @@ const nodejsEntrypoint = async function(command, argJson) {
 
 			result is written to stdout */
 
-			let lines = readline.createInterface({
-				input : fs.createReadStream(selfFilePath),
-				crlfDelay : Infinity,});
-
-			let manif = await createManifest(lines, {
-				filename : path.basename(selfFilePath),
-				...arg});
+			let manif = await reflectManifest()
 
 			process.stdout.write(
 				JSON.stringify(manif, null, `\t`));
