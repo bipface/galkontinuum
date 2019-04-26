@@ -29,6 +29,7 @@ script:
 
 - |
     argJson="{\
+        \"commitId\" : \"$TRAVIS_COMMIT\",\
         \"filename\" : \"$releaseFilename\",\
         \"homepageHref\" : \"https://github.com/$TRAVIS_REPO_SLUG/tree/$TRAVIS_BRANCH/#readme\",\
         \"downloadHref\" : \"https://github.com/$TRAVIS_REPO_SLUG/raw/$TRAVIS_BRANCH/dist/$releaseFilename\"}"
