@@ -54,51 +54,19 @@ into a new directory.
 
 ## Limitations
 
+- Markup is not supported in note text.
+
 - On Gelbooru-based sites, posts added within the last few minutes may fail to
 load due to the search database being out of sync with the main database.
-
-- Posts with an ID less than zero or greater than 2147483647 will not be
-recognised. It is unknown whether there are any boorus with IDs outside this
-range.
 
 - On Danbooru-based sites, it is suspected that only up to 1000 notes will be
 shown on any single post. It is unknown whether there are any posts with over
 1000 notes.
+
+- Posts with an ID less than zero or greater than 2147483647 will not be
+recognised. It is unknown whether there are any boorus with IDs outside this
+range.
 `;
-
-const dbg = true; /* will be assigned false in release-mode */
-
-const manifest = null; /* will be assigned manfiest object in release-mode */
-/* note: in chrome, standalone userscripts don't have access to `GM_info` */
-
-const globalObj =
-	typeof self !== `undefined` ? self :
-	typeof global !== `undefined` ? global :
-	Function(`return this`)();
-/* don't use `globalThis` - not assigned correctly in some environments */
-
-if (typeof globalObj !== `object`) {
-	throw new Error(`failed to obtain global object`);};
-
-const runtime =
-	(typeof globalObj.document === `object`
-		&& globalObj.document.defaultView === globalObj)
-		? `browser`
-	: (typeof globalObj.process === `object`
-		&& typeof globalObj.process.release === `object`
-		&& globalObj.process.release.name === `node`)
-		? `nodejs`
-	: undefined;
-
-/* workaround for prototype.js (which redefines `window.Element`): */
-const Element =
-	runtime === `browser`
-		? ((document.documentElement instanceof globalObj.Element)
-			? globalObj.Element
-			: Object.getPrototypeOf(HTMLElement.prototype).constructor)
-		: undefined;
-if (runtime === `browser` && !(document.documentElement instanceof Element)) {
-	throw new Error(`tampered Element class`);};
 
 /*
 
@@ -144,6 +112,7 @@ known issues:
 
 proposed enhancements:
 
+	- navigation on current page without API requests
 	- spinner on the thumbnail overlay
 	- more things in the footer bar
 	- click the image for next/prev/scale
@@ -259,6 +228,40 @@ references:
 		https://github.com/easylist/easylist/blob/a19a5324bfb8be835c6361162c51c87b07603bfe/easylist/easylist_specific_hide.txt#L10241
 
 */
+
+const dbg = true; /* will be assigned false in release-mode */
+
+const manifest = null; /* will be assigned manfiest object in release-mode */
+/* note: in chrome, standalone userscripts don't have access to `GM_info` */
+
+const globalObj =
+	typeof self !== `undefined` ? self :
+	typeof global !== `undefined` ? global :
+	Function(`return this`)();
+/* don't use `globalThis` - not assigned correctly in some environments */
+
+if (typeof globalObj !== `object`) {
+	throw new Error(`failed to obtain global object`);};
+
+const runtime =
+	(typeof globalObj.document === `object`
+		&& globalObj.document.defaultView === globalObj)
+		? `browser`
+	: (typeof globalObj.process === `object`
+		&& typeof globalObj.process.release === `object`
+		&& globalObj.process.release.name === `node`)
+		? `nodejs`
+	: undefined;
+
+/* workaround for prototype.js (which redefines `window.Element`): */
+const Element =
+	runtime === `browser`
+		? ((document.documentElement instanceof globalObj.Element)
+			? globalObj.Element
+			: Object.getPrototypeOf(HTMLElement.prototype).constructor)
+		: undefined;
+if (runtime === `browser` && !(document.documentElement instanceof Element)) {
+	throw new Error(`tampered Element class`);};
 
 /* -------------------------------------------------------------------------- */
 
@@ -430,7 +433,9 @@ const createReleaseSegments = function(
 	};
 };
 
-const createManifest = async function(srcLines, {filename, homepageHref}) {
+const createManifest = async function(srcLines,
+	{commitId, filename, homepageHref})
+{
 	/* https://developer.chrome.com/extensions/manifest */
 
 	dbg && assert(typeof srcLines[Symbol.asyncIterator] === `function`);
@@ -487,10 +492,14 @@ const createManifest = async function(srcLines, {filename, homepageHref}) {
 	return {
 		manifest_version : 2,
 		name,
-		version, /* note: must consist of digits and dots */
 		author : `Bipface`,
 		key : `u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=`,
 		homepage_url : (homepageUrl ? homepageUrl.href : undefined),
+		version, /* note: must consist of digits and dots */
+		version_name :
+			(typeof commitId === `string`
+				? `${version} (${commitId})`
+				: `${version}`),
 		minimum_chrome_version : `60`, /* suspected */
 		converted_from_user_script : true,
 		content_scripts : [
@@ -713,7 +722,7 @@ const bindInlineView = async function(state, doc, view) {
 		galk['scale-fit'], state.scaleMode === `fit`);
 
 	let info = await infoPromise;
-	if (info !== null) {
+	if (info !== null && info.mediaHref) {
 
 		{/* scroll to the placeholder when it loads: */
 			let triggered = false;
@@ -738,7 +747,7 @@ const bindInlineView = async function(state, doc, view) {
 			thumbnailElem.hidden = false;};
 
 		if (info.type === `video`) {
-			vidElem.src = info.imageHref;
+			vidElem.src = info.mediaHref;
 			vidElem.hidden = false;
 
 			//imgElem.addEventListener(`load`, ev => {
@@ -755,16 +764,13 @@ const bindInlineView = async function(state, doc, view) {
 			imgElem.addEventListener(`load`, ev => {
 				log(`media (image) ${ev.type} event triggered`);
 				thumbnailElem.classList.add(galk['animate-to-hidden']);
-				//thumbnailElem.hidden = true;
-				//thumbnailElem.src = ``;
 
 				//sampleElem.hidden = true;
 				//sampleElem.src = ``;
 			});
 
-			if (info.imageHref) {
-				imgElem.src = info.imageHref;
-				imgElem.hidden = false;};
+			imgElem.src = info.mediaHref;
+			imgElem.hidden = false;
 		};
 
 		let notes = await notesPromise;
@@ -785,9 +791,8 @@ const bindInlineView = async function(state, doc, view) {
 		};
 
 	} else {
-		logWarn(
-			`failed to acquire metadata for current post`+
-			` (id:${state.currentPostId})`);
+		logWarn(`failed to acquire metadata for current post`
+			+` (id:${state.currentPostId})`);
 
 		let unavElem = enforce(getSingleElemByClass(
 			view, galk['media-unavailable']));
@@ -1085,8 +1090,78 @@ const searchExprContainsOrderTerm = function(state, searchExpr) {
 };
 
 const parseSearchExpr = function(state, expr) {
-	//return {terms, order};
+	if (expr === undefined) {
+		return null;};
+	dbg && assert(typeof expr === `string`);
+
+	let domain = getDomain(state);
+
+	if (domain.kind === `gelbooru` && expr === `all`) {
+		/* note: only applies when no leading/trailing space */
+		expr = ``;
+	};
+
+	let terms = [];
+	let idTerms = [];
+	let orderTerm = undefined;
+	let statusTerm = undefined;
+
+	let orderPrefix =
+		domain.kind === `danbooru`
+			? `order:`
+			: `sort:`;
+
+	for (let s of searchExpr.split(/\s/)) {
+		if (s.length === 0) {
+			continue;};
+
+		s = s.toLowerCase();
+
+		if (s.startsWith(`id:`)) {
+			idTerms.push(s.slice(3));
+
+		} if (s.startsWith(orderPrefix)) {
+			/* later term takes precedence; earlier terms are ignored */
+			orderTerm = s.slice(orderPrefix.length);
+
+		} else if (domain.kind === `danbooru` && s.startsWith(`status:`)) {
+			/* later term takes precedence; earlier terms are ignored */
+			statusTerm = s.slice(7);};
+	};
+
+	switch (domain.kind) {
+		case `danbooru` :
+			if (statusTerm === undefined) {
+				/* implicit default if no other status filter is specified: */
+				statusTerm = `-deleted`;};
+
+			/* only the last `id:` term is used */
+			idTerms = idTerms.slice(-1);
+			break;
+
+		case `gelbooru` :
+			break;
+
+		default :
+			dbg && assert(false);
+	};
+
+	return {
+		terms,
+		idTerms,
+		orderTerm,
+		statusTerm,};
 };
+
+test(_ => {
+	let state = {origin : `https://testbooru.donmai.us.net`};
+	//
+});
+
+test(_ => {
+	let state = {origin : `https://gelbooru.com`};
+	//
+});
 
 const getThumbClass = function({name}) {
 	dbg && assert(typeof name === `string`);
@@ -1372,14 +1447,14 @@ const singlePostInfoFromDanbooruApiPostsList = function(state, posts) {
 	{
 		throw new TypeError;};
 
-	let imageHref = post.file_url;
+	let mediaHref = post.file_url;
 
 	let sampleHref = post.large_file_url || post.sample_url;
-	if (sampleHref === imageHref) {
+	if (sampleHref === mediaHref) {
 		sampleHref = undefined;};
 
 	let thumbnailHref = post.preview_file_url || post.preview_url;
-	if (thumbnailHref === imageHref) {
+	if (thumbnailHref === mediaHref) {
 		thumbnailHref = undefined;};
 
 	let md5 = post.md5;
@@ -1390,8 +1465,8 @@ const singlePostInfoFromDanbooruApiPostsList = function(state, posts) {
 
 	return {
 		postId : post.id,
-		type : getMediaType(imageHref),
-		imageHref,
+		type : getMediaType(mediaHref),
+		mediaHref,
 		sampleHref,
 		thumbnailHref,
 		width : (post.image_width || post.width)|0,
@@ -1422,14 +1497,14 @@ const singlePostInfoFromGelbooruApiPostsElem = function(state, postsElem) {
 	if (!isPostId(postId)) {
 		throw new TypeError;};
 
-	let imageHref = post.getAttribute(`file_url`);
+	let mediaHref = post.getAttribute(`file_url`);
 
 	let sampleHref = post.getAttribute(`sample_url`);
-	if (sampleHref === imageHref) {
+	if (sampleHref === mediaHref) {
 		sampleHref = undefined;};
 
 	let thumbnailHref = post.getAttribute(`preview_url`);
-	if (thumbnailHref === imageHref) {
+	if (thumbnailHref === mediaHref) {
 		thumbnailHref = undefined;
 	} else if (getDomain(state).name === `r34xxx`) {
 		/* r34xxx search result pages have the post id at the end of the
@@ -1448,8 +1523,8 @@ const singlePostInfoFromGelbooruApiPostsElem = function(state, postsElem) {
 
 	return {
 		postId,
-		type : getMediaType(imageHref),
-		imageHref,
+		type : getMediaType(mediaHref),
+		mediaHref,
 		sampleHref,
 		thumbnailHref,
 		width : post.getAttribute(`width`)|0,
