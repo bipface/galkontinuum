@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.com/bipface/galkontinuum.svg?branch=master)](https://travis-ci.com/bipface/galkontinuum)
+[galkontinuum] launching as command-line operation ...
 # Galkontinuum
 Galkontinuum is a [userscript][wiki userscript] which enables slideshow-style
 browsing of search results on the Booru family of sites.
@@ -45,6 +46,19 @@ Be aware that the script will not update automatically when installed this way.
 - On Gelbooru-based sites, posts added within the last few minutes may fail to
 load due to the search database being out of sync with the main database.
 
+- On Danbooru-based sites, [restricted posts][danbooru wiki censored tags]
+might not be excluded when navigating through results, despite being hidden in
+the thumbnail list on the page. These will most likely fail to load.
+Working-around this issue is non-trival due to inadequacies in the
+`/post/index` API.
+
+- On Danbooru-based sites, navigation may be hindered or impossible when the
+maximum number of search terms is used.
+For example, searches on e621 containing more than 6 terms will result in an
+error message stating "You can only search up to 6 tags at once". When 6 search
+terms are used, forwards-navigation may fail due to inadequacies in the
+`/post/index` API requiring an additional tag to be inserted.
+
 - On Danbooru-based sites, it is suspected that only up to 1000 notes will be
 shown on any single post. It is unknown whether there are any posts with over
 1000 notes.
@@ -60,3 +74,4 @@ range.
 [tampermonkey]: https://tampermonkey.net/
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
+[danbooru wiki censored tags]: https://danbooru.donmai.us/wiki_pages/84990

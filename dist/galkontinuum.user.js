@@ -1,3 +1,4 @@
+[galkontinuum] launching as command-line operation ...
 ﻿// ==UserScript==
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
@@ -67,6 +68,19 @@ Be aware that the script will not update automatically when installed this way.
 - On Gelbooru-based sites, posts added within the last few minutes may fail to
 load due to the search database being out of sync with the main database.
 
+- On Danbooru-based sites, [restricted posts][danbooru wiki censored tags]
+might not be excluded when navigating through results, despite being hidden in
+the thumbnail list on the page. These will most likely fail to load.
+Working-around this issue is non-trival due to inadequacies in the
+\`/post/index\` API.
+
+- On Danbooru-based sites, navigation may be hindered or impossible when the
+maximum number of search terms is used.
+For example, searches on e621 containing more than 6 terms will result in an
+error message stating "You can only search up to 6 tags at once". When 6 search
+terms are used, forwards-navigation may fail due to inadequacies in the
+\`/post/index\` API requiring an additional tag to be inserted.
+
 - On Danbooru-based sites, it is suspected that only up to 1000 notes will be
 shown on any single post. It is unknown whether there are any posts with over
 1000 notes.
@@ -82,12 +96,14 @@ range.
 [tampermonkey]: https://tampermonkey.net/
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
+[danbooru wiki censored tags]: https://danbooru.donmai.us/wiki_pages/84990
 `;
 
 /*
 
 known issues:
 
+	- buttons too small on e621 on mobile
 	- yande.re: gallary results are in an unknown order
 	- moebooru is_held flag (see below)
 	- 6-term search limit on e621/moebooru
@@ -100,9 +116,7 @@ known issues:
 	- controls typically end up off-screen; hinders navigation by clicking
 		(mainly affects mobile browsing)
 	- can't navigate when search query includes sort:* / order:*
-	- media type badge is misaligned on e621 thumbnails
 	- scrollIntoView() can get erratic when navigating
-	- animated gif / video loses playback position when scale-mode changes
 	- player appears with wrong dimensions before video starts loading
 	- navigating on danbooru does't skip posts that aren't visible to the
 		current user or that have status:deleted
@@ -128,11 +142,19 @@ known issues:
 
 proposed enhancements:
 
+	- new button arrangement
+		[scale | ← | ↑ | → | notes]
+		•
+		[reload | attr | link | cfg | help]
+	- reload button
+	- help button
+	- property sheet
+	- fetch multiple results in navigation API requests
+	- add viewed posts to history (history.replaceState x2)
 	- navigation on current page without API requests
 	- spinner on the thumbnail overlay
 	- more things in the footer bar
 	- click the image for next/prev/scale
-	- stateAsFragment() should optimise away redundant fields
 	- post pages: add a link back to the gallery page on which it appears
 	- settings for showing fullsize/thumbnail/sample
 		loading full-size images may not always be desirable
@@ -241,7 +263,9 @@ references:
 		https://danbooru.donmai.us/wiki_pages/84990
 
 	easylist generic element hiding rules on gelbooru/r34xxx:
-		https://github.com/easylist/easylist/blob/a19a5324bfb8be835c6361162c51c87b07603bfe/easylist/easylist_specific_hide.txt#L10241
+		https://github.com/easylist/easylist/blob/
+			a19a5324bfb8be835c6361162c51c87b07603bfe/
+			easylist/easylist_specific_hide.txt#L10241
 
 */
 
@@ -254,7 +278,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.04.18",
-	"version_name": "2019.04.18 (785d28765677908d0d2ae1a5e67cae0fa2fe0de6)",
+	"version_name": "2019.04.18 (e335ca6ba82ff7441744d8d95888c690b6d7d96a)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -321,6 +345,8 @@ const test =
 		: () => {};
 
 const nodejsEntrypoint = async function(command, argJson) {
+	log(`launching as command-line operation ...`);
+
 	let arg = tryParseJson(argJson);
 	enforce(typeof arg === `object`,
 		`invalid parameter "${argJson}" - expected json object`);
@@ -562,6 +588,7 @@ const createManifest = async function(srcLines,
 };
 
 const userscriptEntrypoint = function(doc) {
+	log(`launching as userscript ...`);
 	dbg && runUnittests(unittests);
 
 	let url = tryParseHref(doc.location.href);
@@ -594,25 +621,25 @@ const userscriptEntrypoint = function(doc) {
 /* -------------------------------------------------------------------------- */
 
 const namespace = `galkontinuum`;
-const galk = new Proxy({}, {get : (_, name) => `${namespace}-${name}`})
+const galk = new Proxy({}, {get : (_, name) => `${namespace}-${name}`});
 
 const hostnameDomainTbl = {
-	[`danbooru.donmai.us`] : {
-		kind : `danbooru`, subkind : `danbooru`, name : `danbooru`},
-	[`gelbooru.com`] : {
-		kind : `gelbooru`, name : `gelbooru`},
-	[`e621.net`] : {
-		kind : `danbooru`, subkind : `e621`, name : `e621`},
-	[`realbooru.com`] : {
-		kind : `gelbooru`, name : `realbooru`},
-	[`rule34.xxx`] : {
-		kind : `gelbooru`, name : `r34xxx`},
-	[`safebooru.org`] : {
-		kind : `gelbooru`, name : `safebooru`},
-	[`testbooru.donmai.us`] : {
-		kind : `danbooru`, subkind : `danbooru`, name : `danbooru`},
-	[`yande.re`] : {
-		kind : `danbooru`, subkind : `moebooru`, name : `yandere`},
+	[`danbooru.donmai.us`] :
+		{kind : `danbooru`, subkind : `danbooru`, name : `danbooru`},
+	[`gelbooru.com`] :
+		{kind : `gelbooru`, name : `gelbooru`},
+	[`e621.net`] :
+		{kind : `danbooru`, subkind : `e621`, name : `e621`},
+	[`realbooru.com`] :
+		{kind : `gelbooru`, name : `realbooru`},
+	[`rule34.xxx`] :
+		{kind : `gelbooru`, name : `r34xxx`},
+	[`safebooru.org`] :
+		{kind : `gelbooru`, name : `safebooru`},
+	[`testbooru.donmai.us`] :
+		{kind : `danbooru`, subkind : `danbooru`, name : `danbooru`},
+	[`yande.re`] :
+		{kind : `danbooru`, subkind : `moebooru`, name : `yandere`},
 };
 
 const onKeyDownGlobal = function(ev) {
@@ -642,29 +669,21 @@ const applyToDocument = function(doc) {
 		logInfo(`document does not appear to be a gallery; aborting`);
 		return;};
 
-	let state = stateFromUrl(url);
+	let state = Object.freeze(stateFromUrl(url));
 	if (state === null) {
 		logError(`failed to derive state from url "${url.href}"; aborting`);
 		return;};
+	dbg && logDebug(`state:`, JSON.stringify(state, null, `\t`));
 
 	ensureApplyGlobalStyleRules(state, doc,
 		() => getGlobalStyleRules(getDomain(state)));
 
 	let viewParent = getInlineViewParent(state, doc);
-	let view = getInlineView(state, viewParent);
-
-	if (!isPostId(state.currentPostId)) {
-		if (view !== null) {
-			view.remove();};
+	let view = ensureInlineView(state, doc, viewParent);
+	if (view !== null) {
+		bindInlineView(state, doc, view);
 	} else {
-		if (view === null) {
-			view = ensureInlineView(state, doc, viewParent);};
-
-		if (view !== null) {
-			bindInlineView(state, doc, view);
-		} else {
-			logError(`failed to create inline-view panel`);};
-	};
+		logError(`failed to create inline-view panel`);};
 
 	let thumbsElem = getThumbnailsListElem(state, doc);
 	if (thumbsElem !== null) {
@@ -676,208 +695,383 @@ const applyToDocument = function(doc) {
 		ensureForwardDanbooruTooltipEvents(state, doc);};
 };
 
-const bindInlineView = async function(state, doc, view) {
-	dbg && assert(isPostId(state.currentPostId));
+const getInlineViewParent = function(state, doc) {
+	return getSingleElemByClass(doc, `content-post`) /* r34xxx */
+		|| getSingleElemByClass(doc, `content`) /* e621 / safebooru */
+		|| doc.getElementById(`content`) /* danbooru */
+		|| getSingleElemByClass(doc, `contain-push`) /* gelbooru */;
+};
 
-	let infoPromise = tryGetPostInfo(state, state.currentPostId)
-	let notesPromise = tryGetPostNotes(state, state.currentPostId);
+const getInlineView = function(state, parentElem) {
+	let ivPanel = null;
+	if (parentElem instanceof HTMLElement) {
+		ivPanel = getSingleElemByClass(parentElem, galk.ivPanel);};
 
-	while (view.hasChildNodes()) {
-		view.removeChild(view.lastChild);};
+	if (!(ivPanel instanceof HTMLElement)) {
+		return null;};
 
-	let scaleBtnMode = state.scaleMode === `fit` ? `full` : `fit`;
+	return ivPanel;
+};
 
-	let baseHref = doc.location.href;
+const ensureInlineView = function(state, doc, parentElem) {
+	let view = getInlineView(state, parentElem);
+	if (view !== null) {
+		return view;};
 
-	let scaleHref = stateAsFragment(
-		{...state, scaleMode : scaleBtnMode}, baseHref);
+	if (parentElem === null) {
+		return null;};
 
-	let exHref = postPageUrl(state, state.currentPostId).href;
-
-	let closeHref = stateAsFragment(
-		{...state, currentPostId : undefined}, baseHref);
+	view = doc.createElement(`section`);
+	view.classList.add(galk.ivPanel);
+	view.hidden = true;
 
 	view.insertAdjacentHTML(`beforeend`,
-		`<header class='${galk['iv-header']} ${galk['iv-ctrls']}'>
-			<a title='Toggle Size'
-				class='${galk.scale} ${galk[scaleBtnMode]}'
-				href='${xmlEscape(scaleHref)}'>
-				<figure class='${galk['btn-icon']}'></figure></a>
+		`<header class='${galk.ivCtrlBar}'>
+			<a title='Toggle Size' class='${galk.scale}'>
+				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Next' class='${galk.next}' href='#'>
-				<figure class='${galk['btn-icon']}'></figure></a>
+			<a title='Next' class='${galk.next}'>
+				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='#${state.currentPostId}' class='${galk.ex}'
-				href='${xmlEscape(exHref)}'>
-				<figure class='${galk['btn-icon']}'></figure></a>
+			<a title='' class='${galk.postPage}'>
+				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Previous' class='${galk.prev}' href='#'>
-				<figure class='${galk['btn-icon']}'></figure></a>
+			<a title='Previous' class='${galk.prev}'>
+				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Close' class='${galk.close}'
-				href='${xmlEscape(closeHref)}'>
-				<figure class='${galk['btn-icon']}'></figure></a>
+			<a title='Close' class='${galk.close}'>
+				<figure class='${galk.btnIcon}'></figure></a>
 		</header>
 
-		<section class='${galk['iv-content-panel']}'>
-			<section class='${galk['iv-content-stack']}'>
-				<aside class='${galk['note-overlay']}'></aside>
+		<section class='${galk.ivContentPanel}'>
+			<section class='${galk.ivContentStack}'>
+				<aside class='${galk.helpOverlay}' hidden=''></aside>
+
+				<aside class='${galk.metaOverlay}' hidden=''></aside>
+
+				<aside class='${galk.notesOverlay}'></aside>
 
 				<img class='${galk.media}' hidden=''/>
 
 				<video class='${galk.media}' hidden=''
 					controls='' loop=''></video>
 
-				<img class='${galk['media-sample']}' hidden=''/>
+				<object class='${galk.media}'
+					type='application/x-shockwave-flash'
+					typemustmatch=''
+					hidden=''>
+					<param name='movie'/>
+				</object>
 
-				<img class='${galk['media-thumbnail']}' hidden=''/>
+				<img class='${galk.mediaSample}' hidden=''/>
 
-				<img class='${galk['media-placeholder']}'/>
+				<img class='${galk.mediaThumbnail}' hidden=''/>
 
-				<figure class='${galk['media-unavailable']}' hidden=''></figure>
+				<img class='${galk.mediaPlaceholder}'/>
+
+				<figure class='${galk.mediaUnavailable}' hidden=''></figure>
 			</section>
 		</section>
 
-		<footer class='${galk['iv-footer']} ${galk['iv-ctrls']}'>
-			<a title='Toggle Notes' href=''
-				class='${galk.notes} ${galk.disabled}'>
-				<figure class='${galk['btn-icon']}'></figure></a>
-			<a class='${galk.disabled}'></a>
-			<a class='${galk.disabled}'></a>
-			<a class='${galk.disabled}'></a>
-			<a title='Help' class='${galk.disabled}'></a>
+		<footer class='${galk.ivCtrlBar}'>
+			<a title='Toggle Notes' class='${galk.notes} ${galk.disabled}'>
+				<figure class='${galk.btnIcon}'></figure></a>
+
+			<a title='Attributes' class='${galk.meta} ${galk.disabled}'>
+				<figure class='${galk.btnIcon}'></figure></a>
+
+			<a class='${galk.disabled}'>
+				<figure class='${galk.btnIcon}'></figure></a>
+
+			<a title='Reload' class='${galk.reload}'>
+				<figure class='${galk.btnIcon}'></figure></a>
+
+			<a title='Help' class='${galk.help}'>
+				<figure class='${galk.btnIcon}'></figure></a>
 		</footer>`);
 
 	/* note: avoid using <div> due to global !important styles in safebooru's
 	mobile layout stylesheet */
 
-	let stackElem = enforce(getSingleElemByClass(
-		view, galk[`iv-content-stack`]));
+	parentElem.append(view);
+	return view;
+};
+
+const bindInlineView = async function(state, doc, view) {
+	dbg && assert(view instanceof HTMLElement);
+
+	view.dispatchEvent(new CustomEvent(galk.revoke));
+	let revoked;
+	{
+		let r = false;
+		revoked = () => r;
+		view.addEventListener(galk.revoke, function f(ev) {
+			ev.currentTarget.removeEventListener(ev.type, f, false);
+			log(`inline view ${ev.type} event triggered`);
+			r = true;
+		}, false);
+	};
+	/* async operations should check `!revoked()` before accessing any
+	inline view elements */
+
+	let notesOvr = enforce(getSingleElemByClass(view, galk.notesOverlay));
+	view.classList.remove(galk.notesVisible);
+	clearNotesOverlay(notesOvr);
 
 	let imgElem = enforce(view.querySelector(`img.${galk.media}`));
-
 	let vidElem = enforce(view.querySelector(`video.${galk.media}`));
+	let swfElem = enforce(view.querySelector(`object.${galk.media}`));
+	let sampleElem = enforce(getSingleElemByClass(view, galk.mediaSample));
+	let thumbElem = enforce(getSingleElemByClass(view, galk.mediaThumbnail));
+	let phldrElem = enforce(getSingleElemByClass(view, galk.mediaPlaceholder));
+	let unavElem = enforce(getSingleElemByClass(view, galk.mediaUnavailable));
 
-	let sampleElem = enforce(getSingleElemByClass(
-		view, galk['media-sample']));
+	let unbindContent = function() {
+		for (let el of [
+			imgElem, vidElem, swfElem, phldrElem,
+			sampleElem, thumbElem, unavElem,])
+		{
+			el.hidden = true;
+			el.removeAttribute(`src`);
+			el.removeAttribute(`srcset`);
+			el.removeAttribute(`data`);
+		};
+	};
 
-	let thumbnailElem = enforce(getSingleElemByClass(
-		view, galk['media-thumbnail']));
+	if (isPostId(state.currentPostId)) {
+		view.hidden = false;
+	} else {
+		view.hidden = true;
+		unbindContent();
 
-	let phldrElem = enforce(getSingleElemByClass(
-		view, galk['media-placeholder']));
+		/* unbind controls: */
+		for (let btn of view.querySelectorAll(`.${galk.ivCtrlBar} > a`)) {
+			btn.removeAttribute(`href`);};
 
-	stackElem.classList.toggle(
-		galk['scale-fit'], state.scaleMode === `fit`);
+		return;
+	};
 
-	let info = await infoPromise;
-	if (info !== null && info.mediaHref) {
+	let infoPromise = tryGetPostInfo(state, state.currentPostId);
+	let notesPromise = tryGetPostNotes(state, state.currentPostId);
 
-		{/* scroll to the placeholder when it loads: */
-			let triggered = false;
-			let f = ev => {
-				phldrElem.removeEventListener(ev.type, f);
-				if (!triggered) {
-					log(`media-placeholder ${ev.type} event triggered`);
-					maybeScrollIntoView(
-						doc.defaultView, phldrElem, `instant`);};
-				triggered = true;
-			};
-			phldrElem.addEventListener(`load`, f);
-			phldrElem.addEventListener(`loadedmetadata`, f);
+	if (await Promise.race([infoPromise, Promise.resolve(null)]) !== null) {
+		if (revoked()) {
+			return;};
+		log(`info for post #${state.currentPostId} is being retrieved`
+			+` asynchronously ...`);
+		unbindContent();
+	};
+
+	infoPromise.then((info) => {
+		log(`info retrieved for post #${state.currentPostId}`);
+		if (revoked()) {
+			return;};
+
+		dbg && assert(typeof info === `object`);
+
+		/* media-unavailable image: */
+
+		if (!info || !info.mediaHref) {
+			logWarn(`failed to acquire metadata for current post`
+				+` (id:${state.currentPostId})`);
+
+			unavElem.style.backgroundImage =
+				`url("${svgDataHref(
+					svgMediaUnavailable(state.currentPostId))}")`;
+			unavElem.hidden = false;
+
+			maybeScrollIntoView(
+				doc.defaultView, unavElem, `instant`);
+
+			return;
 		};
 
-		/* use `srcset` as a workaround for easylist element hiding rules: */
-		phldrElem.srcset = svgDataHref(
-			svgEmptyPlaceholder(info.width, info.height));
+		unavElem.hidden = true;
 
+		/* thumbnail image: */
+
+		thumbElem.classList.remove(galk.animateToHidden);
 		if (info.thumbnailHref) {
-			thumbnailElem.src = info.thumbnailHref;
-			thumbnailElem.hidden = false;};
+			maybeSetAttr(thumbElem, `src`, info.thumbnailHref);
+			thumbElem.hidden = false;
+		} else {
+			thumbElem.hidden = true;
+			thumbElem.removeAttribute(`src`);};
 
 		if (info.type === `video`) {
-			vidElem.src = info.mediaHref;
+			imgElem.hidden = true;
+			imgElem.removeAttribute(`src`);
+			sampleElem.hidden = true;
+			sampleElem.removeAttribute(`src`);
+
+			maybeSetAttr(vidElem, `src`, info.mediaHref);
 			vidElem.hidden = false;
 
 			//imgElem.addEventListener(`load`, ev => {
 
+		//} else if (info.type === `swf`) {
+			// todo
+
 		} else {
-			if (info.sampleHref) {
+			vidElem.hidden = true;
+			vidElem.removeAttribute(`src`);
+
+			if (false) {//info.sampleHref) {
 				// disabled for now as it interferes with the alpha-channel
 
-				//sampleElem.src = info.sampleHref;
-				//sampleElem.hidden = false;
-			};
+				maybeSetAttr(sampleElem, `src`, info.sampleHref);
+				sampleElem.hidden = false;
+			} else {
+				sampleElem.hidden = true;
+				sampleElem.removeAttribute(`src`);};
+
+			maybeSetAttr(imgElem, `src`, info.mediaHref);
 
 			/* hide the resampled versions when the full image loads: */
-			imgElem.addEventListener(`load`, ev => {
-				log(`media (image) ${ev.type} event triggered`);
-				thumbnailElem.classList.add(galk['animate-to-hidden']);
 
+			let onLoaded = function() {
+				thumbElem.classList.add(galk.animateToHidden);
 				//sampleElem.hidden = true;
-				//sampleElem.src = ``;
-			});
+				//sampleElem.removeAttribute(`src`);
+			};
 
-			imgElem.src = info.mediaHref;
+			if (imgElem.complete) {
+				log(`media (image) loaded synchronously or src was unchanged`);
+				onLoaded();
+			} else {
+				imgElem.addEventListener(`load`, function f(ev) {
+					ev.currentTarget.removeEventListener(ev.type, f, false);
+					if (!revoked()) {
+						log(`media (image) ${ev.type} event triggered`);
+						onLoaded();};
+				}, false);
+			};
+
 			imgElem.hidden = false;
 		};
 
-		let notes = await notesPromise;
-		if (notes !== null && notes.length !== 0) {
-			let notesOvr = enforce(getSingleElemByClass(
-				view, galk['note-overlay']));
-			bindNotesOverlay(state, notesOvr, info, notes);
+		/* placeholder image: */
 
-			view.classList.add(galk['notes-visible']);
+		/* use `srcset` as a workaround for easylist element hiding rules: */
+		maybeSetAttr(phldrElem, `srcset`,
+			svgDataHref(svgEmptyPlaceholder(info.width, info.height)));
 
-			let notesBtn = enforce(getSingleElemByClass(view, galk.notes));
-			notesBtn.addEventListener(`click`, ev => {
-				view.classList.toggle(galk['notes-visible']);
-				ev.preventDefault();
-				ev.stopPropagation();
-			}, false);
-			notesBtn.classList.remove(galk.disabled);
+		{/* scroll to the placeholder when it loads: */
+			let onLoaded = function() {
+				maybeScrollIntoView(
+					doc.defaultView, phldrElem, `instant`);
+			};
+
+			if (phldrElem.complete && phldrElem.getBoundingClientRect().width) {
+				/* sometimes `complete` is true yet bounding rect is empty */
+				log(`placeholder loaded synchronously or src was unchanged`);
+				onLoaded();
+			} else {
+				let triggered = false;
+				let f = ev => {
+					ev.currentTarget.removeEventListener(ev.type, f, false);
+					if (!revoked() && !triggered) {
+						log(`placeholder ${ev.type} event triggered`);
+						onLoaded();};
+					triggered = true;
+				};
+				phldrElem.addEventListener(`load`, f, false);
+				phldrElem.addEventListener(`loadedmetadata`, f, false);
+			};
 		};
 
-	} else {
-		logWarn(`failed to acquire metadata for current post`
-			+` (id:${state.currentPostId})`);
+		phldrElem.hidden = false;
+	});
 
-		let unavElem = enforce(getSingleElemByClass(
-			view, galk['media-unavailable']));
+	/* notes overlay and toggle-notes button: */
+	notesPromise.then(async (notes) => {
+		if (revoked()) {
+			return;};
 
-		unavElem.style.backgroundImage = `url("${svgDataHref(
-			svgMediaUnavailable(state.currentPostId))}")`;
-		unavElem.hidden = false;
+		let notesBtn = enforce(view.querySelector(
+			`.${galk.ivCtrlBar} > .${galk.notes}`));
 
-		maybeScrollIntoView(doc.defaultView, unavElem, `instant`);
-	};
+		let postInfo = await infoPromise;
+		if (!postInfo || !notes || !notes.length) {
+			notesBtn.classList.add(galk.disabled);
+			view.classList.remove(galk.notesVisible);
+			return;};
 
-	let prevBtn = enforce(getSingleElemByClass(view, galk.prev));
-	let nextBtn = enforce(getSingleElemByClass(view, galk.next));
+		bindNotesOverlay(state, doc, notesOvr, postInfo, notes);
+		view.classList.add(galk.notesVisible);
 
-	if (searchExprContainsOrderTerm(state, state.searchExpr)) {
-		/* navigation cannot work when using non-default sort order */
-		prevBtn.classList.add(galk.disabled);
-		nextBtn.classList.add(galk.disabled);
-	} else {
-		bindNavigationButton(state, doc, prevBtn, `prev`);
-		bindNavigationButton(state, doc, nextBtn, `next`);
-	};
+		notesBtn.addEventListener(`click`, function f(ev) {
+			if (revoked()) {
+				ev.currentTarget.removeEventListener(ev.type, f, false);
+			} else {
+				view.classList.toggle(galk.notesVisible);
+				ev.preventDefault();
+				ev.stopPropagation();};
+		}, false);
 
-	let closeBtn = enforce(getSingleElemByClass(view, galk.close));
+		notesBtn.classList.remove(galk.disabled);
+	});
+
+	enforce(getSingleElemByClass(view, galk.ivContentStack))
+		.classList.toggle(galk.scaleFit, state.scaleMode === `fit`);
+
+	let currentHref = doc.location.href;
+
+	/* scale-mode button: */
+	let invScaleMode = state.scaleMode === `fit` ? `full` : `fit`;
+
+	let scaleBtn = enforce(view.querySelector(
+		`.${galk.ivCtrlBar} > .${galk.scale}`));
+	scaleBtn.classList.remove(galk[state.scaleMode]);
+	scaleBtn.classList.add(galk[invScaleMode]);
+	scaleBtn.href = stateAsFragment(
+		{...state, scaleMode : invScaleMode}, currentHref);
+
+	/* post page button: */
+	let postPageBtn = enforce(view.querySelector(
+		`.${galk.ivCtrlBar} > .${galk.postPage}`));
+	postPageBtn.title = `#${state.currentPostId}`;
+	postPageBtn.href = postPageUrl(state, state.currentPostId).href;
+
+	/* close button: */
+	let closeBtn = enforce(view.querySelector(
+		`.${galk.ivCtrlBar} > .${galk.close}`));
+	closeBtn.href = stateAsFragment(
+		{...state, currentPostId : undefined}, currentHref);
+
 	/* when closing, return to the corresponding thumbnail: */
-	closeBtn.addEventListener(`click`, () =>
-		onCloseInlineView(state, doc), false);
+	closeBtn.addEventListener(`click`, function f(ev) {
+		ev.currentTarget.removeEventListener(ev.type, f, false);
+		if (!revoked()) {
+			onCloseInlineView(state, doc);};
+	}, false);
+
+	/* prev and next buttons:
+	(directions are intentionally inverted) */
+	bindNavigationButton(revoked, state, doc,
+		enforce(getSingleElemByClass(view, galk.prev)), 1);
+	bindNavigationButton(revoked, state, doc,
+		enforce(getSingleElemByClass(view, galk.next)), -1);
 };
 
-const bindNotesOverlay = function(state, ovr, postInfo, notes) {
+const onCloseInlineView = function(state, doc) {
+	maybeScrollIntoView(doc.defaultView,
+		doc.getElementById(`post_${state.currentPostId}`) /* danbooru */
+		|| doc.getElementById(`p${state.currentPostId}`) /* others */,
+		`instant` /* smooth scroll can fail due to changing page height */);
+};
+
+const clearNotesOverlay = function(ovr) {
+	while (ovr.hasChildNodes()) {
+		ovr.removeChild(ovr.firstChild);};
+};
+
+const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
 	dbg && assert(ovr instanceof Element);
 	dbg && assert(typeof postInfo === `object`);
 	dbg && assert(Array.isArray(notes));
 
-	while (ovr.hasChildNodes()) {
-		ovr.removeChild(ovr.firstChild);};
+	clearNotesOverlay(ovr);
 
 	let {width, height} = postInfo;
 	if (!isInt(width) || !(width > 0)
@@ -885,7 +1079,7 @@ const bindNotesOverlay = function(state, ovr, postInfo, notes) {
 	{
 		return;};
 
-	let frag = ovr.ownerDocument.createDocumentFragment();
+	let frag = doc.createDocumentFragment();
 	for (let note of notes) {
 		dbg && assert(typeof note.text === `string`);
 		if (note.x < 0 || note.x >= width
@@ -893,9 +1087,10 @@ const bindNotesOverlay = function(state, ovr, postInfo, notes) {
 		{
 			continue;};
 
-		let el = ovr.ownerDocument.createElement(`figure`);
-		el.insertAdjacentHTML(`beforeend`,
-			`<figcaption>${xmlEscape(note.text)}</figcaption>`);
+		let el = doc.createElement(`figure`);
+		el.appendChild(
+			Object.assign(doc.createElement(`figcaption`),
+				{textContent : note.text}));
 
 		el.style.left = `calc((${note.x} / ${width}) * 100%)`;
 		el.style.top = `calc((${note.y} / ${height}) * 100%)`;
@@ -911,35 +1106,34 @@ const bindNotesOverlay = function(state, ovr, postInfo, notes) {
 	ovr.appendChild(frag);
 };
 
-const onCloseInlineView = function(state, doc) {
-	maybeScrollIntoView(doc.defaultView,
-		doc.getElementById(`post_${state.currentPostId}`) /* danbooru */
-		|| doc.getElementById(`p${state.currentPostId}`) /* others */,
-		`instant` /* smooth scroll can fail due to changing page height */);
-};
-
-const bindNavigationButton = function(state, doc, btn, direction) {
+const bindNavigationButton = function(
+	revoked, state, doc, btn, direction)
+{
 	enforce(btn instanceof HTMLAnchorElement);
-	dbg && assert(direction === `prev` || direction === `next`);
+	dbg && assert(direction === -1 || direction === 1);
 
-	primeNavigationButton(state, doc, btn, direction);
+	btn.classList.remove(galk.pending);
+	btn.classList.remove(galk.ready);
+	btn.removeAttribute(`href`);
 
-	let onClick = ev => {
-		if (!btn.classList.contains(galk.ready)) {
-			primeNavigationButton(state, doc, btn, direction);
-			if (ev) {
-				ev.preventDefault();
-				ev.stopPropagation();};
-		};
-	};
+	primeNavigationButton(revoked, state, doc, btn, direction);
 
-	btn.addEventListener(`click`, onClick, false);
+	btn.addEventListener(`click`, function f(ev) {
+		if (revoked()) {
+			ev.currentTarget.removeEventListener(ev.type, f, false);
+		} else if (!btn.classList.contains(galk.ready)) {
+			primeNavigationButton(revoked, state, doc, btn, direction);
+			ev.preventDefault();
+			ev.stopPropagation();};
+	}, false);
 };
 
-const primeNavigationButton = async function(state, doc, btn, direction) {
+const primeNavigationButton = async function(
+	revoked, state, doc, btn, direction)
+{
 	enforce(btn instanceof HTMLAnchorElement);
 	dbg && assert(isPostId(state.currentPostId));
-	dbg && assert(direction === `prev` || direction === `next`);
+	dbg && assert(direction === -1 || direction === 1);
 
 	if (btn.classList.contains(galk.pending)
 		|| btn.classList.contains(galk.ready))
@@ -948,12 +1142,13 @@ const primeNavigationButton = async function(state, doc, btn, direction) {
 
 	btn.classList.add(galk.pending);
 
-	let info;
-	try {
-		info = await tryNavigatePostInfo(
-			state, state.currentPostId, direction, state.searchExpr);
-	} finally {
-		btn.classList.remove(galk.pending);};
+	let info = await tryNavigatePostInfo(
+		state, state.searchExpr, state.currentPostId, direction);
+
+	if (revoked()) {
+		return;};
+
+	btn.classList.remove(galk.pending);
 
 	if (info === null) {
 		return;};
@@ -985,7 +1180,7 @@ const bindThumbnail = function(state, doc, thumb) {
 
 	let ovr = ensureThumbnailOverlay(state, doc, thumb, info);
 	if (ovr !== null) {
-		let inLink = enforce(getSingleElemByClass(ovr, galk['thumb-in-link']));
+		let inLink = enforce(getSingleElemByClass(ovr, galk.open));
 
 		inLink.href = stateAsFragment(
 			{...state,
@@ -1002,56 +1197,26 @@ const ensureThumbnailOverlay = function(state, doc, thumb, info) {
 	dbg && assert(typeof info === `object`);
 	dbg && assert(isPostId(info.postId));
 
-	let ovr = getSingleElemByClass(thumb, galk['thumb-overlay']);
+	let ovr = getSingleElemByClass(thumb, galk.thumbOverlay);
 	if (ovr !== null) {
 		return ovr;};
 
 	ovr = doc.createElement(`nav`);
-	ovr.classList.add(galk['thumb-overlay']);
-	ovr.classList.add(galk[`thumb-overlay-${info.postId}`]);
+	ovr.classList.add(galk.thumbOverlay);
+	ovr.classList.add(galk.thumbOverlay+`-${info.postId}`);
 
 	let title = thumbnailTitle(state, thumb);
 
-	ovr.insertAdjacentHTML(`beforeend`,
-		`<a class='${galk['thumb-ex-link']}'
-			title='${xmlEscape(title)}'
-			href='${xmlEscape(info.url.href)}'></a>
-		<a class='${galk['thumb-in-link']}'
-			title='${xmlEscape(title)}' href='#)}'></a>`);
+	ovr.appendChild(
+		Object.assign(doc.createElement(`a`),
+			{title, className : galk.postPage, href : info.url.href}));
+	ovr.appendChild(
+		Object.assign(doc.createElement(`a`),
+			{title, className : galk.open,}));
 
 	thumb.prepend(ovr);
 
 	return ovr;
-};
-
-const ensureInlineView = function(state, doc, parentElem) {
-	let ivPanel = getInlineView(state, parentElem);
-
-	if (parentElem !== null && ivPanel === null) {
-		ivPanel = doc.createElement(`section`);
-		ivPanel.classList.add(galk['iv-panel']);
-		parentElem.append(ivPanel);
-	};
-
-	return ivPanel;
-};
-
-const getInlineView = function(state, parentElem) {
-	let ivPanel = null;
-	if (parentElem instanceof HTMLElement) {
-		ivPanel = getSingleElemByClass(parentElem, galk['iv-panel']);};
-
-	if (!(ivPanel instanceof HTMLElement)) {
-		return null;};
-
-	return ivPanel;
-};
-
-const getInlineViewParent = function(state, doc) {
-	return getSingleElemByClass(doc, `content-post`) /* r34xxx */
-		|| getSingleElemByClass(doc, `content`) /* e621 / safebooru */
-		|| doc.getElementById(`content`) /* danbooru */
-		|| getSingleElemByClass(doc, `contain-push`) /* gelbooru */;
 };
 
 const getThumbnailsListElem = function(state, doc) {
@@ -1110,44 +1275,73 @@ const isPostId = function(id) {
 	return isInt(id) && id >= 0;
 };
 
-const domainKindOrderTermPrefixTbl = {
-	danbooru : `order:`,
-	gelbooru : `sort:`,
+const searchExprEquiv = function(a, b) {
+	if (a === b) {
+		return true;};
+
+	dbg && assert(typeof a === `object`);
+	dbg && assert(typeof b === `object`);
+
+	return a.orderTerm === a.orderTerm
+		&& a.statusTerm === b.statusTerm
+		&& sequiv(a.terms, b.terms)
+		&& sequiv(a.idTerms, b.idTerms);
 };
 
-const searchExprContainsOrderTerm = function(state, searchExpr) {
-	/* navigation cannot work when using non-default sort order */
-	if (searchExpr === undefined) {
-		return false;};
+const searchExprIdOrder = function(state, expr) {
+	/* 1 : ordered by id ascending
+	-1 : ordered by id descending
+	undefined : ordered by some other property */
 
-	let orderPrefix = domainKindOrderTermPrefixTbl[getDomain(state).kind];
-	if (orderPrefix === undefined) {
-		return false;};
-
-	if (typeof searchExpr === `string`) {
-		for (let s of searchExpr.split(/\s/)) {
-			if (s.length === 0) {
-				continue;};
-
-			s = s.toLowerCase();
-			if (s.startsWith(orderPrefix)) {
-				return true;};
-		};
-	};
-
-	return false;
-};
-
-const parseSearchExpr = function(state, expr) {
-	if (expr === undefined) {
-		return null;};
-	dbg && assert(typeof expr === `string`);
+	dbg && assert(typeof expr === `object`);
 
 	let domain = getDomain(state);
 
-	if (domain.kind === `gelbooru` && expr === `all`) {
+	if (expr === null || expr.orderTerm === undefined) {
+		if (domain.subkind === `moebooru`) {
+			/* default gallery order is index_timestamp desc
+			(an order that cannot be specified in api queries): */
+			return undefined;
+		};
+
+		/* in all other boorus, default gallery order is id desc: */
+		return -1;
+	};
+
+	switch (domain.kind) {
+		case `danbooru` :
+			if (expr.orderTerm === `-id`) {return -1;};
+			if (expr.orderTerm === `id`) {return 1;};
+			break;
+
+		case `gelbooru` :
+			if (expr.orderTerm === `id:asc`) {return 1;};
+			/* id:<anything> is effectively equivalent to id:desc */
+			if (expr.orderTerm === `id`) {return -1;};
+			if (expr.orderTerm.startsWith(`id:`)) {return -1;};
+			break;
+
+		default :
+			dbg && assert(false);
+	};
+
+	return undefined;
+};
+
+const getOrderPrefix = function(domain) {
+	return domain.kind === `danbooru`
+		? `order:`
+		: `sort:`;
+};
+
+const parseSearchExprString = function(state, exprString = ``) {
+	dbg && assert(typeof exprString === `string`);
+
+	let domain = getDomain(state);
+
+	if (domain.kind === `gelbooru` && exprString === `all`) {
 		/* note: only applies when no leading/trailing space */
-		expr = ``;
+		exprString = ``;
 	};
 
 	let terms = [];
@@ -1155,13 +1349,10 @@ const parseSearchExpr = function(state, expr) {
 	let orderTerm = undefined;
 	let statusTerm = undefined;
 
-	let orderPrefix =
-		domain.kind === `danbooru`
-			? `order:`
-			: `sort:`;
+	let orderPrefix = getOrderPrefix(domain);
 
-	for (let s of searchExpr.split(/\s/)) {
-		if (s.length === 0) {
+	for (let s of exprString.split(/\s/)) {
+		if (!s.length) {
 			continue;};
 
 		s = s.toLowerCase();
@@ -1169,13 +1360,16 @@ const parseSearchExpr = function(state, expr) {
 		if (s.startsWith(`id:`)) {
 			idTerms.push(s.slice(3));
 
-		} if (s.startsWith(orderPrefix)) {
+		} else if (s.startsWith(orderPrefix)) {
 			/* later term takes precedence; earlier terms are ignored */
 			orderTerm = s.slice(orderPrefix.length);
 
 		} else if (domain.kind === `danbooru` && s.startsWith(`status:`)) {
 			/* later term takes precedence; earlier terms are ignored */
-			statusTerm = s.slice(7);};
+			statusTerm = s.slice(7);
+
+		} else {
+			terms.push(s);};
 	};
 
 	switch (domain.kind) {
@@ -1202,15 +1396,47 @@ const parseSearchExpr = function(state, expr) {
 		statusTerm,};
 };
 
-test(_ => {
-	let state = {origin : `https://testbooru.donmai.us.net`};
-	//
-});
+const searchExprAllTerms = function(domain, expr) {
+	dbg && assert(typeof expr === `object`);
+	if (expr === null) {
+		return [];};
 
-test(_ => {
-	let state = {origin : `https://gelbooru.com`};
-	//
-});
+	let terms = [];
+
+	if (expr.orderTerm !== undefined) {
+		dbg && assert(typeof expr.orderTerm === `string`);
+		terms.push(getOrderPrefix(domain)+expr.orderTerm);
+	};
+
+	if (expr.statusTerm !== undefined) {
+		dbg && assert(typeof expr.statusTerm === `string`);
+		terms.push(`status:`+expr.statusTerm);
+	};
+
+	dbg && assert(Array.isArray(expr.idTerms));
+	for (let x of expr.idTerms) {
+		dbg && assert(typeof x === `string`);
+		terms.push(`id:`+x);
+	};
+
+	dbg && assert(Array.isArray(expr.terms));
+	for (let x of expr.terms) {
+		dbg && assert(typeof x === `string`);
+		terms.push(x);
+	};
+
+	return terms;
+};
+
+//test(_ => {
+//	let state = {origin : `https://testbooru.donmai.us.net`};
+	// todo
+//});
+
+//test(_ => {
+//	let state = {origin : `https://gelbooru.com`};
+	// todo
+//});
 
 const getThumbClass = function({name}) {
 	dbg && assert(typeof name === `string`);
@@ -1224,11 +1450,11 @@ const ensureForwardDanbooruTooltipEvents = function(state, doc) {
 	dbg && assert(doc instanceof HTMLDocument);
 	enforce(doc.body instanceof HTMLBodyElement, `<body> element missing`);
 
-	if (doc.getElementById(galk['forward-tooltip-events']) !== null) {
+	if (doc.getElementById(galk.forwardTooltipEvents) !== null) {
 		return;};
 
 	let scriptEl = doc.createElement(`script`);
-	scriptEl.id = galk['forward-tooltip-events'];
+	scriptEl.id = galk.forwardTooltipEvents;
 	scriptEl.textContent = getForwardDanbooruTooltipEventsScriptText;
 	doc.body.append(scriptEl);
 };
@@ -1237,7 +1463,7 @@ const getForwardDanbooruTooltipEventsScriptText = `{
 	/* refer to danbooru/app/javascript/src/javascripts/post_tooltips.js */
 
 	let onEvent = function(ev) {
-		let ovr = ev.target.closest('.${galk['thumb-overlay']}');
+		let ovr = ev.target.closest('.${galk.thumbOverlay}');
 		if (ovr === null) {
 			return;};
 
@@ -1279,23 +1505,6 @@ const getForwardDanbooruTooltipEventsScriptText = `{
 
 */
 
-const ephemeralCacheExpireMs = 60000;
-
-const ephemeralCacheAssign = function(cache, key, val) {
-	dbg && assert(cache instanceof Map);
-
-	dbg && assert(val !== undefined,
-		`ephemeral cache entry value cannot be undefined`);
-
-	dbg && assert(!cache.has(key),
-		`cannot reassign unexpired ephemeral cache entry`);
-
-	cache.set(key, val);
-	setTimeout(
-		() => cache.delete(key),
-		ephemeralCacheExpireMs);
-};
-
 const postInfoTbl = new Map(); /* postId → postInfo */
 
 const tryGetPostInfo = async function(state, postId) {
@@ -1314,35 +1523,35 @@ const tryGetPostInfo = async function(state, postId) {
 		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
-	switch (getDomain(state).kind) {
-		case `danbooru` :
-			try {
-				info = singlePostInfoFromDanbooruApiPostsList(
+	{
+		let infos = null;
+		switch (getDomain(state).kind) {
+			case `danbooru` :
+				infos = postInfosFromDanbooruApiPostsList(
 					state, xhr.response);
-			} catch (_) {
-				reportInvalidResponse(requUrl.href, xhr);
-				return null;};
-			break;
+				break;
 
-		case `gelbooru` :
-			if (!(xhr.responseXML instanceof Document)) {
-				reportInvalidResponse(requUrl.href, xhr);
-				return null;};
+			case `gelbooru` :
+				if (xhr.responseXML instanceof Document) {
+					infos = postInfosFromGelbooruApiPostsElem(
+						state, xhr.responseXML.documentElement);};
+				break;
 
-			try {
-				info = singlePostInfoFromGelbooruApiPostsElem(
-					state, xhr.responseXML.documentElement);
-			} catch (_) {
-				reportInvalidResponse(requUrl.href, xhr);
-				return null;};
-			break;
+			default :
+				dbg && assert(false);
+		};
 
-		default :
-			dbg && assert(false);
+		if (infos === null || infos.length > 1) {
+			reportInvalidResponse(requUrl.href, xhr);
+			return null;};
+
+		if (infos.length === 0) {
+			return null;};
+
+		info = infos[0];
 	};
 
-	if (info === null) {
-		return null;};
+	dbg && assert(info !== null);
 
 	if (info.postId !== postId) {
 		reportInvalidResponse(requUrl.href, xhr);
@@ -1401,100 +1610,192 @@ const tryGetPostNotes = async function(state, postId) {
 		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
-	ephemeralCacheAssign(notesCache, postId, notes);
+	notesCache.set(postId, notes);
 
 	return notes;
 };
 
-const navigationRequCache = new Map(); /* href → result */
+let searchResultsCache = null; /* searchExpr → postId sequence */
+
+const ensureSearchResultsCache = function(searchExpr) {
+	dbg && assert(typeof searchResultsCache === `object`);
+
+	if (searchResultsCache === null
+		|| !searchExprEquiv(searchExpr, searchResultsCache.searchExpr))
+	{
+		log(`search expression changed; (re)initialising results cache ...`);
+		searchResultsCache = {
+			searchExpr,
+			results : [],};
+	};
+
+	dbg && assert(typeof searchResultsCache.searchExpr === `object`);
+	dbg && assert(Array.isArray(searchResultsCache.results));
+
+	return searchResultsCache;
+};
+
+const getCachedSearchResult = function(searchExpr, fromId, direction) {
+	dbg && assert(isPostId(fromId));
+	dbg && assert(direction === -1 /* prev */ || direction === 1 /* next */);
+
+	let c = ensureSearchResultsCache(searchExpr);
+	dbg && assert(typeof c === `object`);
+	dbg && assert(Array.isArray(c.results));
+
+	let fromOffset = c.results.indexOf(fromId);
+
+	let rv = fromOffset >= 0
+		? c.results[fromOffset + direction]
+		: undefined;
+
+	log(`search results cache ${rv !== undefined ? 'hit' : 'miss'};`
+		+` fromId: ${fromId}, direction: ${direction}`);
+
+	return rv;
+};
+
+const cacheSearchResults = function(
+	searchExpr, fromId, direction, idsToCache)
+{
+	dbg && assert(isPostId(fromId));
+	dbg && assert(direction === -1 /* prev */ || direction === 1 /* next */);
+
+	dbg && assert(isIterable(idsToCache) && lengthOf(idsToCache) >= 0);
+	if (!idsToCache.length) {
+		return;};
+
+	log(`before: search results cache contains`
+		+` ${((searchResultsCache || {}).results || []).length} entries`);
+	log(`adding ${idsToCache.length} postIds to search results cache;`
+		+` fromId: ${fromId}, direction: ${direction} ...`);
+
+	let c = ensureSearchResultsCache(searchExpr);
+	dbg && assert(typeof c === `object`);
+
+	let fromOffset = c.results.indexOf(fromId);
+	if (fromOffset < 0) {
+		c.results = [fromId];
+		fromOffset = 0;};
+
+	if (direction === -1) {
+		c.results = Array.from(chain(
+			idsToCache,
+			subseq(c.results, fromOffset, -1)));
+	} else if (direction === 1) {
+		c.results = Array.from(chain(
+			subseq(c.results, 0, fromOffset + 1),
+			idsToCache));
+	};
+
+	log(`after: search results cache contains`
+		+` ${((searchResultsCache || {}).results || []).length} entries`);
+};
 
 const tryNavigatePostInfo = async function(
-	state, fromPostId, direction, searchExpr)
+	state, searchExpr, fromPostId, direction)
 {
-	dbg && assert(isPostId(fromPostId));
-	dbg && assert(direction === `prev` || direction === `next`);
-
-	let requUrl = requestNavigatePostInfoUrl(
-		state, fromPostId, direction, searchExpr);
-	if (requUrl === null) {
+	let postId = await tryNavigatePostId(
+		state, searchExpr, fromPostId, direction);
+	if (!isPostId(postId)) {
 		return null;};
 
-	let cacheKey = requUrl.href;
-	let postId = navigationRequCache.get(cacheKey);
-	if (postId !== undefined) {
-		dbg && assert(isPostId(postId));
-		let info = postInfoTbl.get(postId);
-		if (info !== undefined) {
-			dbg && assert(typeof info === `object`);
-			return info;};
+	return await tryGetPostInfo(state, postId);
+};
+
+const tryNavigatePostId = async function(
+	state, searchExpr, fromPostId, direction)
+{
+	dbg && assert(isPostId(fromPostId));
+	dbg && assert(direction === -1 /* prev */ || direction === 1 /* next */);
+
+	{/* check if we have it cached: */
+		let postId = getCachedSearchResult(
+			searchExpr, fromPostId, direction);
+		if (postId !== undefined) {
+			// todo: prefetching
+			return postId;
+		};
 	};
+
+	let requUrl = requestNavigatePostInfoUrl(
+		state, searchExpr, fromPostId, direction);
+	if (requUrl === null) {
+		return undefined;};
 
 	let xhr = await tryApiRequ(state, requUrl);
 	if (xhr === null) {
 		reportInvalidResponse(requUrl.href, xhr);
-		return null;};
+		return undefined;};
 
-	let info = null;
+	let infos = null;
 	switch (getDomain(state).kind) {
 		case `danbooru` :
-			try {
-				info = singlePostInfoFromDanbooruApiPostsList(
-					state, resp.response);
-			} catch (_) {
-				reportInvalidResponse(requUrl.href, xhr);
-				return null;};
+			infos = postInfosFromDanbooruApiPostsList(
+				state, xhr.response);
 			break;
 
 		case `gelbooru` :
-			if (!(xhr.responseXML instanceof Document)) {
-				reportInvalidResponse(requUrl.href, resp);
-				return null;};
-			try {
-				info = singlePostInfoFromGelbooruApiPostsElem(
-					state, xhr.responseXML.documentElement);
-			} catch (_) {
-				reportInvalidResponse(requUrl.href, xhr);
-				return null;};
+			if (xhr.responseXML instanceof Document) {
+				infos = postInfosFromGelbooruApiPostsElem(
+					state, xhr.responseXML.documentElement);};
 			break;
 
 		default :
 			dbg && assert(false);
 	};
 
-	if (info === null) {
-		return null;};
-	dbg && assert(isPostId(info.postId));
-
-	if (direction === `prev`
-		? info.postId >= fromPostId
-		: info.postId <= fromPostId)
-	{
-		/* result takes us in the wrong direction */
+	if (infos === null) {
 		reportInvalidResponse(requUrl.href, xhr);
-		return null;};
+		return undefined;};
 
-	postInfoTbl.set(info.postId, info);
+	let ids = new Int32Array(infos.length);
+	for (let i = 0, n = infos.length; i < n; ++i) {
+		let info = infos[i];
+		dbg && assert(isPostId(info.postId));
 
-	ephemeralCacheAssign(navigationRequCache, cacheKey, info.postId);
+		ids[i] = info.postId;
+		postInfoTbl.set(info.postId, info);
+	};
 
-	return info;
+	if (ids.length >= 2) {
+		/* check whether the results need to be reversed: */
+		let odr = searchExprIdOrder(state, searchExpr);
+		if ((odr === 1 && ids[0] > ids[ids.length - 1])
+			|| (odr === -1 && ids[0] < ids[ids.length - 1]))
+		{
+			ids.reverse();
+		};
+	};
+
+	cacheSearchResults(searchExpr, fromPostId, direction, ids);
+
+	return (direction === -1
+		? ids[ids.length - 1]
+		: ids[0]);
 };
 
-const singlePostInfoFromDanbooruApiPostsList = function(state, posts) {
-	/* no results → null,
-		malformed results → throw */
 
-	if (!Array.isArray(posts) || posts.length !== 1) {
-		throw new TypeError;};
-	if (posts.length === 0) {
+const postInfosFromDanbooruApiPostsList = function(state, posts) {
+	if (!Array.isArray(posts)) {
 		return null;};
 
-	let post = posts[0];
+	let infos = Array(posts.length);
+	for (let i = 0, n = posts.length; i < n; ++i) {
+		let info = postInfoFromDanbooruApiPost(state, posts[i]);
+		if (info === null) {
+			return null;};
+		infos[i] = info;
+	};
+	return infos;
+};
+
+const postInfoFromDanbooruApiPost = function(state, post) {
 	if (typeof post !== `object`
 		|| post === null
 		|| !isPostId(post.id))
 	{
-		throw new TypeError;};
+		return null;};
 
 	let mediaHref = post.file_url;
 
@@ -1523,28 +1824,32 @@ const singlePostInfoFromDanbooruApiPostsList = function(state, posts) {
 		md5,};
 };
 
-const singlePostInfoFromGelbooruApiPostsElem = function(state, postsElem) {
-	/* no results → null,
-		malformed results → throw */
-
+const postInfosFromGelbooruApiPostsElem = function(state, postsElem) {
 	if (!(postsElem instanceof Element)
-		|| postsElem.tagName !== `posts`
-		|| postsElem.children.length > 1)
+		|| postsElem.tagName !== `posts`)
 	{
-		throw new TypeError;};
-
-	if (postsElem.children.length === 0) {
 		return null;};
 
-	let post = postsElem.children[0];
+	let elems = postsElem.children;
+	let infos = Array(elems.length);
+	for (let i = 0, n = elems.length; i < n; ++i) {
+		let info = postInfoFromGelbooruApiPostElem(state, elems[i]);
+		if (info === null) {
+			return null;};
+		infos[i] = info;
+	};
+	return infos;
+};
+
+const postInfoFromGelbooruApiPostElem = function(state, post) {
 	if (!(post instanceof Element)
 		|| post.tagName !== `post`)
 	{
-		throw new TypeError;};
+		return null;};
 
 	let postId = tryParsePostId(post.getAttribute(`id`));
 	if (!isPostId(postId)) {
-		throw new TypeError;};
+		return null;};
 
 	let mediaHref = post.getAttribute(`file_url`);
 
@@ -1665,8 +1970,23 @@ const reportInvalidResponse = function(href, xhr) {
 
 const fragmentPrefix = `#`+namespace+`:`;
 
-const stateAsFragment = function(state, baseHref) {
-	return fragmentPrefix+encodeURIComponent(JSON.stringify(state));
+const stateFromUrl = function(url) {
+	if (!(url instanceof URL)) {
+		return null;};
+
+	let origin = url.origin;
+
+	if (getDomain({origin}) === undefined) {
+		/* unknown site */
+		return null;};
+
+	return {
+		currentPostId : postIdFromUrl({origin}, url),
+		scaleMode : `fit`,
+		origin : url.origin,
+		searchExpr : parseSearchExprString({origin},
+			searchExprStringFromUrl({origin}, url)),
+		...stateFromFragment(url.hash),};
 };
 
 const stateFromFragment = function(frag) {
@@ -1681,23 +2001,37 @@ const stateFromFragment = function(frag) {
 	return state;
 };
 
-const stateFromUrl = function(url) {
-	if (!(url instanceof URL)) {
-		return null;};
+const stateAsFragment = function(state, baseHref) {
+	let fragState = {};
 
-	let origin = url.origin;
+	/* only include fields which differ from what can be derived from the rest
+	of the url */
 
-	if (getDomain({origin}) === undefined) {
-		/* unknown site */
-		return null;};
+	let baseUrl = tryParseHref(baseHref);
+	if (baseUrl !== null) {
+		baseUrl.hash = ``;};
 
-	return Object.freeze({
-		currentPostId : postIdFromUrl({origin}, url),
-		scaleMode : `fit`,
-		...stateFromFragment(url.hash),
-		origin : url.origin,
-		searchExpr : searchExprFromUrl({origin}, url),});
+	let base = stateFromUrl(baseUrl);
+	if (base === null) {
+		fragState = state;
+	} else {
+		for (let k of new Set(chain(Object.keys(state), Object.keys(base)))) {
+			let v1 = state[k];
+			let v2 = base[k];
+			if (k === `searchExpr`) {
+				if (!searchExprEquiv(v1, v2)) {
+					fragState[k] = v1;};
+			} else if (v1 !== v2) {
+				fragState[k] = v1;};
+		};
+	};
+
+	return fragmentPrefix+encodeURIComponent(JSON.stringify(fragState));
 };
+
+test(_ => {
+	// todo
+});
 
 const getDomain = function({origin}) {
 	dbg && assert(typeof origin === `string`);
@@ -1718,90 +2052,89 @@ const getDomain = function({origin}) {
 	return domain;
 };
 
-test(_ => {
-	/* e621 search queries */
+//test(_ => {
+//	/* e621 search queries */
+//
+//	let url = new URL(`https://e621.net`);
+//	for (let [path, queryString, expect] of [
+//		[`/post`, ``, undefined],
+//		[`/post/`, ``, undefined],
+//		[`/post/index`, ``, undefined],
+//		[`/post/index/`, ``, undefined],
+//		[`/post/index/1`, ``, undefined],
+//		[`/post/index/1/`, ``, undefined],
+//		[`/post/index/1/id:<1837141 order:id`, ``, `id:<1837141 order:id`],
+//		[`/post/index/1/id:<1837141 order:id/`, ``, `id:<1837141 order:id`],
+//		[`/post/index/1/id:<1837141 order:id//`, ``, undefined],
+//		[`/post/index/1/id:<1837141 order:id/asdf`, ``, undefined],
+//		[`/post/index//id:<1837141 order:id`, ``, undefined],
+//		[`/post/index/1//id:<1837141 order:id`, ``, undefined],
+//		[`/post/index/asdf/id:<1837141 order:id`, ``, undefined],
+//		[`/post`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
+//		[`/post/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
+//		[`/post/index`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
+//		[`/post/index/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
+//		[`/post/index/1`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
+//		[`/post/index/1/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
+//		/* path takes precedence over querystring: */
+//		[`/post/index/1/absurdres`, `tags=id:<1837141 order:id`, `absurdres`],])
+//	{
+//		url.pathname = path;
+//		url.search = queryString;
+//
+//		assert(isGalleryUrl(url));
+//
+//		let {searchExpr} = stateFromUrl(url);
+//		assert(searchExpr === expect); // todo
+//	};
+//});
 
-	let url = new URL(`https://e621.net`);
-	for (let [path, queryString, expect] of [
-		[`/post`, ``, undefined],
-		[`/post/`, ``, undefined],
-		[`/post/index`, ``, undefined],
-		[`/post/index/`, ``, undefined],
-		[`/post/index/1`, ``, undefined],
-		[`/post/index/1/`, ``, undefined],
-		[`/post/index/1/id:<1837141 order:id`, ``, `id:<1837141 order:id`],
-		[`/post/index/1/id:<1837141 order:id/`, ``, `id:<1837141 order:id`],
-		[`/post/index/1/id:<1837141 order:id//`, ``, undefined],
-		[`/post/index/1/id:<1837141 order:id/asdf`, ``, undefined],
-		[`/post/index//id:<1837141 order:id`, ``, undefined],
-		[`/post/index/1//id:<1837141 order:id`, ``, undefined],
-		[`/post/index/asdf/id:<1837141 order:id`, ``, undefined],
-		[`/post`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-		[`/post/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-		[`/post/index`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-		[`/post/index/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-		[`/post/index/1`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-		[`/post/index/1/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-		/* path takes precedence over querystring: */
-		[`/post/index/1/absurdres`, `tags=id:<1837141 order:id`, `absurdres`],])
-	{
-		url.pathname = path;
-		url.search = queryString;
+//test(_ => {
+//	/* danbooru search queries */
+//
+//	let url = new URL(`https://danbooru.donmai.us`);
+//	for (let [path, queryString, expect] of [
+//		[`/`, ``, undefined],
+//		[`/posts`, ``, undefined],
+//		[`/posts/`, ``, undefined],
+//		[`/posts`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
+//		[`/posts/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],])
+//	{
+//		url.pathname = path;
+//		url.search = queryString;
+//
+//		assert(isGalleryUrl(url));
+//
+//		let {searchExpr} = stateFromUrl(url);
+//		assert(searchExpr === expect); // todo
+//	};
+//});
 
-		assert(isGalleryUrl(url));
+//test(_ => {
+//	/* gelbooru search queries */
+//
+//	let url = new URL(`https://rule34.xxx`);
+//	for (let [path, queryString, expect] of [
+//		[`/`, `page=post&s=list&tags=all`, undefined],
+//		// todo
+//		])
+//	{
+//		url.pathname = path;
+//		url.search = queryString;
+//
+//		assert(isGalleryUrl(url));
+//
+//		let {searchExpr} = stateFromUrl(url);
+//		assert(searchExpr === expect); // todo
+//	};
+//});
 
-		let {searchExpr} = stateFromUrl(url);
-		assert(searchExpr === expect);
-	};
-});
-
-test(_ => {
-	/* danbooru search queries */
-
-	let url = new URL(`https://danbooru.donmai.us`);
-	for (let [path, queryString, expect] of [
-		[`/`, ``, undefined],
-		[`/posts`, ``, undefined],
-		[`/posts/`, ``, undefined],
-		[`/posts`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-		[`/posts/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],])
-	{
-		url.pathname = path;
-		url.search = queryString;
-
-		assert(isGalleryUrl(url));
-
-		let {searchExpr} = stateFromUrl(url);
-		assert(searchExpr === expect);
-	};
-});
-
-test(_ => {
-	/* gelbooru search queries */
-
-	let url = new URL(`https://rule34.xxx`);
-	for (let [path, queryString, expect] of [
-		[`/`, `page=post&s=list&tags=all`, undefined],
-		// todo
-		])
-	{
-		url.pathname = path;
-		url.search = queryString;
-
-		assert(isGalleryUrl(url));
-
-		let {searchExpr} = stateFromUrl(url);
-		assert(searchExpr === expect);
-	};
-});
-
-const searchExprFromUrl = function({origin}, url) {
-	if (!(url instanceof URL)) {
-		return undefined;};
+const searchExprStringFromUrl = function({origin}, url) {
+	dbg && assert(url instanceof URL);
 
 	let domain = getDomain({origin});
 
-	let searchExpr = url.searchParams.get(`tags`);
+	let s = url.searchParams.get(`tags`);
 
 	if (domain.kind === `danbooru`
 		&& domain.subkind !== `danbooru`)
@@ -1814,24 +2147,15 @@ const searchExprFromUrl = function({origin}, url) {
 			&& /^\d+$/.test(xs[2]))
 		{
 			/* path takes precedence searchParams */
-			searchExpr = xs[3];
+			s = xs[3];
 		};
 	};
 
-	if (typeof searchExpr !== `string`
-		|| !/\S/.test(searchExpr))
-	{
+	if (typeof s !== `string` || !/\S/.test(s)) {
 		/* contains only whitespace characters */
 		return undefined;};
 
-	searchExpr = searchExpr.trim();
-
-	if (domain.kind === `gelbooru`
-		&& searchExpr === `all`)
-	{
-		return undefined;};
-
-	return searchExpr;
+	return s;
 };
 
 const isGalleryUrl = function(url) {
@@ -1848,7 +2172,7 @@ const isGalleryUrl = function(url) {
 			let xs = tryParsePathFromUrl(url);
 			if (domain.subkind === `danbooru`) {
 				return xs !== null
-					&& (xs.length === 0
+					&& (!xs.length
 						|| (xs.length === 1
 							&& xs[0] === `posts`));
 			} else {
@@ -1973,42 +2297,62 @@ const requestPostNotesUrl = function(state, postId) {
 	};
 };
 
+const navigatePostInfoRequPageLen = 3; // todo: increase
+
 const requestNavigatePostInfoUrl = function(
-	state, postId, direction, searchExpr)
+	state, expr, fromPostId, direction)
 {
-	dbg && assert(isPostId(postId));
-	dbg && assert(direction === `prev` || direction === `next`);
-	dbg && assert(!searchExprContainsOrderTerm(searchExpr));
+	dbg && assert(isPostId(fromPostId));
+	dbg && assert(typeof expr === `object` && expr !== null);
+	dbg && assert(direction === -1 || direction === 1);
+
+	let idOrder = searchExprIdOrder(state, expr);
+	if (idOrder === undefined) {
+		/* navigation is only supported for searches in id-order */
+		log(`cannot create navigation request URL`
+			+` - search expression specifies an unrecognised ordering`);
+		return null;};
+	dbg && assert(idOrder === -1 || idOrder === 1);
 
 	let url = new URL(state.origin);
 	let domain = getDomain(state);
 
 	switch (domain.kind) {
 		case `danbooru` : {
-			url.searchParams.set(`limit`, `1`);
+			url.searchParams.set(`limit`, `${navigatePostInfoRequPageLen}`);
 			url.pathname = `/post/index.json`;
 
-			let q = ``;
+			let d = direction * idOrder; /* query direction */
 
 			if (domain.subkind === `danbooru`) {
 				url.searchParams.set(`page`,
-					direction === `prev`
-						? `b${postId}` /* before */
-						: `a${postId}` /* after */);
+					d === -1
+						? `b${fromPostId}` /* before */
+						: `a${fromPostId}` /* after */);
 			} else {
-				if (direction === `prev`) {
-					if (domain.subkind === `e621`) {
-						url.searchParams.set(`before_id`, `${postId}`);
-					} else {
-						q += `id:<${postId} order:-id`;};
+				if (d === -1 && domain.subkind === `e621`) {
+					url.searchParams.set(`before_id`, `${fromPostId}`);
 				} else {
-					q += `id:>${postId} order:id`;};
+					if (expr !== null && expr.idTerms.length) {
+						/* danb. can't evaluate multiple id: constraints */
+						log(`cannot create navigation request URL - search`
+							+` expression already contains an "id:" term`);
+						return null;};
+
+					if (d === -1) {
+						expr = {...expr,
+							idTerms : [`<${fromPostId}`],
+							orderTerm : `-id`,};
+					} else {
+						expr = {...expr,
+							idTerms : [`>${fromPostId}`],
+							orderTerm : `id`,};
+					};
+				};
 			};
 
-			if (typeof searchExpr === `string` && searchExpr.length !== 0) {
-				q += (q ? ` ` : ``)+searchExpr;};
-
-			url.searchParams.set(`tags`, q);
+			url.searchParams.set(`tags`,
+				searchExprAllTerms(domain, expr).join(` `));
 
 			return url;
 		};
@@ -2018,17 +2362,22 @@ const requestNavigatePostInfoUrl = function(
 			url.searchParams.set(`page`, `dapi`);
 			url.searchParams.set(`s`, `post`);
 			url.searchParams.set(`q`, `index`);
-			url.searchParams.set(`limit`, `1`);
+			url.searchParams.set(`limit`, `${navigatePostInfoRequPageLen}`);
 
-			let q =
-				direction === `prev`
-					? `id:<${postId} sort:id:desc`
-					: `id:>${postId} sort:id:asc`;
+			let d = direction * idOrder; /* query direction */
 
-			if (typeof searchExpr === `string` && searchExpr.length !== 0) {
-				q += ` `+searchExpr;};
+			if (d === -1) {
+				expr = {...expr,
+					idTerms : [...expr.idTerms, `<${fromPostId}`],
+					orderTerm : `id:desc`,};
+			} else {
+				expr = {...expr,
+					idTerms : [...expr.idTerms, `>${fromPostId}`],
+					orderTerm : `id:asc`,};
+			};
 
-			url.searchParams.set(`tags`, q);
+			url.searchParams.set(`tags`,
+				searchExprAllTerms(domain, expr).join(` `));
 
 			return url;
 		};
@@ -2038,35 +2387,35 @@ const requestNavigatePostInfoUrl = function(
 	};
 };
 
-test(_ => {
-	let url = requestNavigatePostInfoUrl(
-		{origin : `https://rule34.xxx`},
-		265, `next`, `absurdres`);
-
-	assert(url.origin === `https://rule34.xxx`);
-	assert(url.pathname === `/`);
-	assert(url.searchParams.get(`page`) === `dapi`);
-	assert(url.searchParams.get(`s`) === `post`);
-	assert(url.searchParams.get(`q`) === `index`);
-	assert(url.searchParams.get(`limit`) === `1`);
-	assert(url.searchParams.get(`tags`) === `id:>265 sort:id:asc absurdres`);
-
-	// todo
-});
-
-test(_ => {
-	let url = requestNavigatePostInfoUrl(
-		{origin : `https://testbooru.donmai.us`},
-		265, `next`, `absurdres`);
-
-	assert(url.origin === `https://testbooru.donmai.us`);
-	assert(url.pathname === `/post/index.json`);
-	assert(url.searchParams.get(`limit`) === `1`);
-	assert(url.searchParams.get(`page`) === `a265`);
-	assert(url.searchParams.get(`tags`) === `absurdres`);
-
-	// todo
-});
+//test(_ => {
+//	let url = requestNavigatePostInfoUrl(
+//		{origin : `https://rule34.xxx`},
+//		265, `next`, `absurdres`);
+//
+//	assert(url.origin === `https://rule34.xxx`);
+//	assert(url.pathname === `/`);
+//	assert(url.searchParams.get(`page`) === `dapi`);
+//	assert(url.searchParams.get(`s`) === `post`);
+//	assert(url.searchParams.get(`q`) === `index`);
+//	assert(url.searchParams.get(`limit`) === `1`);
+//	assert(url.searchParams.get(`tags`) === `id:>265 sort:id:asc absurdres`);
+//
+//	// todo
+//});
+//
+//test(_ => {
+//	let url = requestNavigatePostInfoUrl(
+//		{origin : `https://testbooru.donmai.us`},
+//		265, `next`, `absurdres`);
+//
+//	assert(url.origin === `https://testbooru.donmai.us`);
+//	assert(url.pathname === `/post/index.json`);
+//	assert(url.searchParams.get(`limit`) === `1`);
+//	assert(url.searchParams.get(`page`) === `a265`);
+//	assert(url.searchParams.get(`tags`) === `absurdres`);
+//
+//	// todo
+//});
 
 const postPageUrl = function(state, postId) {
 	dbg && assert(isPostId(postId));
@@ -2191,7 +2540,7 @@ test(_ => {
 const tryParsePath = function(s) {
 	/* s is expected to already have been decoded via decodeURIComponent() */
 
-	if (typeof s !== `string` || s.length === 0 || s[0] !== `/`) {
+	if (typeof s !== `string` || !s.length || s[0] !== `/`) {
 		return null;};
 
 	let components = [];
@@ -2247,88 +2596,6 @@ const tryParsePostId = function(s) {
 	return n | -invalid;
 };
 
-const tryParseXml = function(src) {
-	/* DOMParser.parseFromString() may return a <parsererror> document instead
-	of throwing when the input is malformed
-
-	while this solution seems to reliably identify malformed xml,
-	it unfortunately cannot prevent 'XML Parsing Error:' messages from being
-	written to the console */
-
-	if (typeof src !== `string`) {
-		return null;};
-
-	let key = `a`+Math.random().toString(32);
-
-	let parser = new DOMParser;
-
-	let doc = null;
-	try {
-		doc = parser.parseFromString(
-			src+`<?${key}?>`, `application/xml`);
-	} catch (x) {};
-
-	if (!(doc instanceof XMLDocument)) {
-		return null;};
-
-	let lastNode = doc.lastChild;
-	if (!(lastNode instanceof ProcessingInstruction)
-		|| lastNode.target !== key
-		|| lastNode.data !== ``)
-	{
-		return null;};
-
-	doc.removeChild(lastNode);
-
-	/* in some cases, chrome chooses to insert its <parsererror> into the root
-	element, leaving the rest of the document intact (including our processing
-	instruction).
-
-	see: chromium/src/third_party/blink/renderer/core/xml/parser/xml_errors.cc
-
-	however, chrome will never insert more than one <parsererror> element.
-	so to detect this case, we'll force an error which triggers this behaviour
-	and check whether the result has the same number of <parsererror> elements
-	as the previous result. */
-
-	let errElemCount =
-		doc.documentElement.getElementsByTagName(`parsererror`).length;
-	if (errElemCount !== 0) {
-		let errDoc = null;
-		try {
-			errDoc = parser.parseFromString(
-				src+`<?`, `application/xml`);
-		} catch (x) {};
-
-		if (!(errDoc instanceof XMLDocument)
-			|| errDoc.documentElement.getElementsByTagName(`parsererror`).length
-				=== errElemCount)
-		{
-			return null;};
-	};
-
-	return doc;
-};
-
-const xmlEscape = function(chars) {
-	let s = ``;
-	for (let c of chars) {
-		switch (c) {
-			case `"` : s += `&quot;`; break;
-			case `'` : s += `&apos;`; break;
-			case `<` : s += `&lt;`; break;
-			case `>` : s += `&gt;`; break;
-			case `&` : s += `&amp;`; break;
-			default : s += c; break;
-		};
-	};
-	return s;
-};
-
-test(_ => {
-	assert(xmlEscape(`>\udbff\udfff<`) === `&gt;\udbff\udfff&lt;`);
-});
-
 const maybeScrollIntoView = function(
 	viewport /* window */, el, behavior = `smooth`)
 {
@@ -2336,14 +2603,28 @@ const maybeScrollIntoView = function(
 		return;};
 
 	let rect = el.getBoundingClientRect();
-	if (!viewport
+	if (!(viewport instanceof Window)
 		|| rect.left < 0
 		|| rect.right > viewport.innerWidth
 		|| rect.top < 0
 		|| rect.bottom > viewport.innerHeight)
 	{
+		log(`scrolling to element <${el.tagName}> ...`);
 		el.scrollIntoView({behavior});
+	} else {
+		log(`element <${el.tagName}> already within viewport; not scrolling`,
+			`(w: ${rect.width}, h: ${rect.height})`);
 	};
+};
+
+const maybeSetAttr = function(el, attr, value) {
+	dbg && assert(el instanceof Element);
+
+	/* important for <video> elements where even setting `src` to the same value
+	may cause the video playback to be reset */
+
+	if (el.getAttribute(attr) !== value) {
+		el.setAttribute(attr, value);};
 };
 
 const sequiv = function(xs, ys, pred = Object.is) {
@@ -2417,6 +2698,138 @@ const chain = function(...xss) {
 		xss,};
 };
 
+const subseqIterProto = {
+	_initialise() {
+		this.initialised = true;
+		let {start, end, xs} = this;
+
+		if (this.len >= 0) {
+			/* known length (assumes .length is correct) */
+
+			if (start < end) {
+				let iter = xs[Symbol.iterator]();
+
+				/* advance iter to start offset: */
+				for (let i = 0; i < start; ++i) {
+					iter.next();};
+
+				this.n = end - start;
+				this.iter = iter;
+			};
+
+		} else {
+			let iter = xs[Symbol.iterator]();
+
+			/* advance iter to start offset: */
+			let skipN = Math.min(start, Infinity * (end - start));
+			let i = 0;
+			for (; i < skipN; ++i) {
+				let next = iter.next();
+				if (next.done) {
+					/* reached the end of the source;
+					ensure next() is not called again */
+					i = end;
+					this.doneNext = next;
+					break;
+				};
+			};
+			this.n = end - i;
+			this.iter = iter;
+		};
+	},
+
+	next() {
+		if (!this.initialised) {
+			this._initialise();};
+
+		if (this.n > 0) {
+			let rv = this.iter.next();
+			--this.n;
+			if (rv.done) {
+				this.n = 0;
+				this.doneNext = rv;
+			};
+			return rv;
+		} else {
+			return this.doneNext;};
+	},
+
+	[Symbol.iterator]() {return this;},
+};
+
+const subseqResultProto = {
+	get length() {
+		return this.len >= 0 ? this.len : undefined;
+	},
+
+	[Symbol.iterator]() {
+		return {
+			__proto__ : subseqIterProto,
+			initialised : false,
+			xs : this.xs,
+			n : 0,
+			iter : null,
+			doneNext : {done : true},
+			start : this.start,
+			end : this.end,
+			len : this.len,};
+	},
+};
+
+const subseq = function(xs, start = 0, end = Infinity) {
+	dbg && assert(isIterable(xs));
+	dbg && assert(typeof start === `number`);
+	dbg && assert(typeof end === `number`);
+
+	start = Math.trunc(start);
+	end = Math.trunc(end);
+
+	let len = lengthOf(xs);
+	if (len >= 0) {
+		start = normaliseIntSliceTerm(start, len);
+		end = normaliseIntSliceTerm(end, len);
+		len = start < end ? end - start : 0;
+	} else if (start < 0 || end < 0) {
+		throw new RangeError(`can't slice a sequence of unknown length `
+			+`using negative indices`);};
+
+	return {
+		__proto__ : subseqResultProto,
+		xs,
+		start,
+		end,
+		len,};
+};
+
+const normaliseIntSliceTerm = function(val, len) {
+	dbg && assert(typeof len === `number`
+		&& Number.isSafeInteger(len) && len >= 0);
+
+	let n = +val;
+
+	if (!(n >= 0)) {
+		n += len;
+		if (!(n >= 0)) {
+			n = 0;};
+	} else if (n > len) {
+		n = len;};
+
+	return n;
+};
+
+const lengthOf = function(xs) {
+	if (typeof xs === `string`) {
+		/* strings are utf-16, so calculating length is an O(n) operation */
+		return -1;};
+
+	let len = Reflect.get(Object(xs), `length`);
+	return isValidLength(len) ? len : -1;
+};
+
+const isValidLength = function(len) {
+	return Number.isSafeInteger(len) && len >= 0;
+};
+
 const isIterable = function(xs) {
 	return xs != null && typeof xs[Symbol.iterator] === `function`;
 };
@@ -2461,6 +2874,10 @@ const logError = function(...xs) {
 	console.error(`[${namespace}]`, ...xs);
 };
 
+const logDebug = function(...xs) {
+	dbg && console.debug(`[${namespace}]`, ...xs);
+};
+
 /* --- styles --- */
 
 const ensureApplyGlobalStyleRules = function(state, doc, getRules) {
@@ -2476,11 +2893,11 @@ const ensureApplyGlobalStyleRules = function(state, doc, getRules) {
 
 	let root = document.documentElement;
 	let domain = getDomain(state);
-	root.classList.add(galk[`domain-name-${domain.name}`]);
-	root.classList.add(galk[`domain-kind-${domain.kind}`]);
+	root.classList.add(galk.domainName+`-${domain.name}`);
+	root.classList.add(galk.domainKind+`-${domain.kind}`);
 	if (domain.subkind !== undefined) {
-		root.classList.add(galk[`domain-subkind-${domain.subkind}`]);};
-	root.classList.add(galk[`theme-${getInlineViewTheme(domain, doc)}`]);
+		root.classList.add(galk.domainSubkind+`-${domain.subkind}`);};
+	root.classList.add(galk.theme+`-${getInlineViewTheme(domain, doc)}`);
 
 	let style = doc.createElement(`style`);
 	style.id = galk.globalStylesheet;
@@ -2532,28 +2949,29 @@ const getGlobalStyleRules = function(domain) {
 		/* --- vars --- */
 
 		`:root {
-			--${galk['c-iv-bg']} : hsl(232, 17%, 46%);
-			--${galk['r-iv-inact-opacity']} : 0.6;
-			--${galk['c-iv-action']} : hsl(33, 100%, 70%);
-			--${galk['c-ex-link']} : hsl(233, 100%, 75%);
-			--${galk['c-note-bg']} : hsla(60, 100%, 96.7%, 0.3);
-			--${galk['c-note-border']} : hsla(0, 0%, 0%, 0.3);
-			--${galk['c-note-caption']} : hsla(0, 0%, 10%, 1);
-			--${galk['c-note-caption-bg']} : hsla(60, 100%, 96.7%, 0.95);
-			--${galk['d-iv-width']} : 185mm;
+			--${galk.cIvBg} : hsl(232, 17%, 46%);
+			--${galk.rIvInactOpacity} : 0.6;
+			--${galk.cIvAction} : hsl(33, 100%, 70%);
+			--${galk.cExLink} : hsl(233, 100%, 75%);
+			--${galk.cNoteBg} : hsla(60, 100%, 96.7%, 0.3);
+			--${galk.cNoteBorder} : hsla(0, 0%, 0%, 0.3);
+			--${galk.cNoteCaption} : hsla(0, 0%, 10%, 1);
+			--${galk.cNoteCaptionBg} : hsla(60, 100%, 96.7%, 0.95);
+			--${galk.dIvWidth} : 185mm;
+			--${galk.dIvBarHeight} : 11mm;
 		}`,
 
-		`:root.${galk['theme-dark']} {
-			--${galk['c-base']} : hsla(0, 0%, 30%, 0.5);
+		`:root.${galk.theme}-dark {
+			--${galk.cBase} : hsla(0, 0%, 30%, 0.5);
 		}`,
 
-		`:root.${galk['theme-light']} {
-			--${galk['c-base']} : hsla(0, 0%, 100%, 0.5);
+		`:root.${galk.theme}-light {
+			--${galk.cBase} : hsla(0, 0%, 100%, 0.5);
 		}`,
 
 		/* --- inline view --- */
 
-		`.${galk['iv-panel']} {
+		`.${galk.ivPanel} {
 			display : flex;
 			flex-direction : column;
 			align-items : center;
@@ -2561,144 +2979,146 @@ const getGlobalStyleRules = function(domain) {
 			min-height : calc(74mm + 50vh);
 		}`,
 
-		`.${galk['iv-header']}, .${galk['iv-footer']} {
+		`.${galk.ivPanel}[hidden] {
+			display : none;
+		}`,
+
+		`.${galk.ivCtrlBar} {
 			max-width : 100vw;
-			width : var(--${galk['d-iv-width']});
-			min-height : 11mm;
+			width : var(--${galk.dIvWidth});
+			min-height : var(--${galk.dIvBarHeight});
 		}`,
 
-		`.${galk['iv-header']} > *,
-		.${galk['iv-footer']} > *
-		{
-			background-color : var(--${galk['c-base']});
-			opacity : var(--${galk['r-iv-inact-opacity']});
+		`.${galk.ivCtrlBar} > * {
+			background-color : var(--${galk.cBase});
+			opacity : var(--${galk.rIvInactOpacity});
 		}`,
 
-		`.${galk['iv-content-panel']} {
+		`.${galk.ivContentPanel} {
 			display : flex;
 			align-items : center;
 			max-width : 100%; /* make extra-wide images overflow to the right */
 			min-height : 37mm;
 		}`,
 
-		`.${galk['iv-content-stack']} {
+		`.${galk.ivContentStack} {
 			display : grid;
 			justify-items : center;
 			align-items : center;
 		}`,
 
-		`.${galk['iv-content-stack']} > * {
+		`.${galk.ivContentStack} > * {
 			grid-column : 1;
 			grid-row : 1;
 		}`,
 
-		`.${galk['iv-content-stack']} > [hidden] {
+		`.${galk.ivContentStack} > [hidden] {
 			display : none; /* necessary due to 'reset' stylesheets */
 		}`,
 
-		`.${galk['iv-content-stack']}.${galk['scale-fit']} {
+		`.${galk.ivContentStack}.${galk.scaleFit} {
 			max-width : 100vw;
 		}`,
 
-		`.${galk['iv-content-stack']}.${galk['scale-fit']} > * {
+		`.${galk.ivContentStack}.${galk.scaleFit} > * {
 			max-width : 100%;
 			max-height : 100vh;
 		}`,
 
-		`.${galk['iv-content-stack']} > .${galk.media} {
+		`.${galk.ivContentStack} > .${galk.media} {
 			z-index : 2;
 		}`,
 
-		`.${galk['iv-content-stack']} > .${galk['media-sample']} {
+		`.${galk.ivContentStack} > .${galk.mediaSample} {
 			z-index : 1;
 		}`,
 
-		`.${galk['iv-content-stack']} > .${galk['media-thumbnail']} {
+		`.${galk.ivContentStack} > .${galk.mediaThumbnail} {
 			z-index : 0;
 			opacity : 0.5;
 			filter : blur(1.32mm);
 		}`,
 
-		`.${galk['iv-content-stack']} > .${galk['media-sample']},
-		.${galk['iv-content-stack']} > .${galk['media-thumbnail']}
+		`.${galk.ivContentStack} > .${galk.mediaSample},
+		.${galk.ivContentStack} > .${galk.mediaThumbnail}
 		{
 			width : auto;
 			height : 100%;
 		}`,
 
-		`.${galk['iv-content-stack']} > .${galk['media-unavailable']} {
+		`.${galk.ivContentStack} > .${galk.mediaUnavailable} {
 			margin : 0;
-			width : var(--${galk['d-iv-width']});
+			width : var(--${galk.dIvWidth});
 			height : 74mm;
-			background-color : var(--${galk['c-iv-bg']});
+			background-color : var(--${galk.cIvBg});
 			background-size : 70%;
 			background-repeat : no-repeat;
 			background-position : center;
 			opacity : 0.75;
 		}`,
 
-		`.${galk['iv-content-stack']} > .${galk['note-overlay']} {
+		`.${galk.ivContentStack} > .${galk.notesOverlay} {
 			z-index : 3;
 			width : 100%;
 			height : 100%;
 		}`,
 
-		`.${galk['note-overlay']} {
+		`.${galk.notesOverlay} {
 			position : relative;
 			/* don't obstruct interaction with underlying elements: */
 			visibility : hidden;
 		}`,
 
-		`.${galk['note-overlay']} > figure {
+		`.${galk.notesOverlay} > figure {
 			position : absolute;
 			visibility : visible;
 			margin : 0;
 			z-index : 0;
-			background : var(--${galk['c-note-bg']});
+			background : var(--${galk.cNoteBg});
 		}`,
 
-		`.${galk['note-overlay']} > figure,
-		.${galk['note-overlay']} > figure > figcaption
+		`.${galk.notesOverlay} > figure,
+		.${galk.notesOverlay} > figure > figcaption
 		{
 			border-style : solid;
 			border-width : 1px;
-			border-color : var(--${galk['c-note-border']});
+			border-color : var(--${galk.cNoteBorder});
 		}`,
 
-		`.${galk['iv-panel']}:not(.${galk['notes-visible']})
-			.${galk['note-overlay']} > figure
+		`.${galk.ivPanel}:not(.${galk.notesVisible})
+			.${galk.notesOverlay} > figure
 		{
 			display : none;
 		}`,
 
-		`.${galk['note-overlay']} > figure > figcaption {
+		`.${galk.notesOverlay} > figure > figcaption {
 			visibility : hidden;
 			position : absolute;
 			padding : 1mm;
 			top : calc(100% + 1.85mm);
-			border-color : var(--${galk['c-note-caption']});
-			color : var(--${galk['c-note-caption']});
-			background : var(--${galk['c-note-caption-bg']});
+			border-color : var(--${galk.cNoteCaption});
+			color : var(--${galk.cNoteCaption});
+			background : var(--${galk.cNoteCaptionBg});
 		}`,
 
-		`.${galk['note-overlay']} > figure:hover {
+		`.${galk.notesOverlay} > figure:hover {
 			z-index : 1;
 		}`,
 
-		`.${galk['note-overlay']} > figure:hover > figcaption {
+		`.${galk.notesOverlay} > figure:hover > figcaption {
 			visibility : visible;
 		}`,
 
 		/* --- controls --- */
 
-		`.${galk['iv-ctrls']} {
+		`.${galk.ivCtrlBar} {
 			display : flex;
 			flex-direction : row;
 			align-items : stretch;
 			justify-content : center;
 		}`,
 
-		`.${galk['iv-ctrls']} > * {
+		`.${galk.ivCtrlBar} > * {
 			/* equal sizes: */
 			flex-basis : 0;
 			flex-grow : 1;
@@ -2709,82 +3129,87 @@ const getGlobalStyleRules = function(domain) {
 			justify-content : center;
 		}`,
 
-		`.${galk['iv-ctrls']} > a:hover,
-		.${galk['iv-panel']}.${galk['notes-visible']}
-			.${galk['iv-ctrls']} > .${galk.notes}
+		`.${galk.ivCtrlBar} > a:hover,
+		.${galk.ivPanel}.${galk.notesVisible}
+			.${galk.ivCtrlBar} > .${galk.notes}
 		{
 			opacity : 1;
 		}`,
 
-		`.${galk['iv-ctrls']} > * > .${galk['btn-icon']} {
+		`.${galk.ivCtrlBar} > * > .${galk.btnIcon} {
 			margin : 0;
-			width : 7.4mm;
-			height : 7.4mm;
-			background-size : cover;
+			width : calc(var(--${galk.dIvBarHeight}) * 0.7);
+			height : calc(var(--${galk.dIvBarHeight}) * 0.7);
+			background-size : contain;
+			background-repeat : no-repeat;
+			background-position : center;
 			background-image : url(${svgHref(svgCircleRing)});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.scale}.${galk.full}
-			> .${galk['btn-icon']}
+		`.${galk.ivCtrlBar} > .${galk.scale}.${galk.full}
+			> .${galk.btnIcon}
 		{
 			background-image : url(${svgHref(svgCircleExpand)});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.scale}.${galk.fit}
-			> .${galk['btn-icon']}
+		`.${galk.ivCtrlBar} > .${galk.scale}.${galk.fit}
+			> .${galk.btnIcon}
 		{
 			background-image : url(${svgHref(svgCircleContract)});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.prev}.${galk.ready}
-			> .${galk['btn-icon']}
+		`.${galk.ivCtrlBar} > .${galk.prev}.${galk.ready}
+			> .${galk.btnIcon}
 		{
 			background-image : url(${svgCircleArrowRightHref});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.ex}:hover {
-			background-color : var(--${galk['c-ex-link']});
+		`.${galk.ivCtrlBar} > .${galk.postPage}:hover {
+			background-color : var(--${galk.cExLink});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.ex} > .${galk['btn-icon']} {
+		`.${galk.ivCtrlBar} > .${galk.postPage} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleLink)});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.next}.${galk.ready}
-			> .${galk['btn-icon']}
+		`.${galk.ivCtrlBar} > .${galk.next}.${galk.ready}
+			> .${galk.btnIcon}
 		{
 			background-image : url(${svgCircleArrowLeftHref});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.close}:hover {
-			background-color : var(--${galk['c-iv-action']});
+		`.${galk.ivCtrlBar} > .${galk.close}:hover {
+			background-color : var(--${galk.cIvAction});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.close} > .${galk['btn-icon']} {
+		`.${galk.ivCtrlBar} > .${galk.close} > .${galk.btnIcon} {
 			background-image : url(${svgCircleArrowUpHref});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.notes} > .${galk['btn-icon']} {
+		`.${galk.ivCtrlBar} > .${galk.notes} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleNote)});
 		}`,
 
-		`.${galk['iv-panel']}:not(.${galk['notes-visible']})
-			.${galk['iv-ctrls']} > .${galk.notes}:hover
-			> .${galk['btn-icon']}
+		`.${galk.ivPanel}:not(.${galk.notesVisible})
+			.${galk.ivCtrlBar} > .${galk.notes}:hover
+			> .${galk.btnIcon}
 		{
-			opacity : var(--${galk['r-iv-inact-opacity']});
+			opacity : var(--${galk.rIvInactOpacity});
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.pending},
-		.${galk['iv-ctrls']} > .${galk.disabled}
+		`.${galk.ivCtrlBar} > a {
+			cursor : pointer;
+		}`,
+
+		`.${galk.ivCtrlBar} > .${galk.pending},
+		.${galk.ivCtrlBar} > .${galk.disabled}
 		{
+			cursor : none;
 			pointer-events : none;
 		}`,
 
-		`.${galk['iv-ctrls']} > .${galk.prev}.${galk.pending}
-			> .${galk['btn-icon']},
-		.${galk['iv-ctrls']} > .${galk.next}.${galk.pending}
-			> .${galk['btn-icon']}
+		`.${galk.ivCtrlBar} > .${galk.prev}.${galk.pending} > .${galk.btnIcon},
+		.${galk.ivCtrlBar} > .${galk.next}.${galk.pending} > .${galk.btnIcon}
 		{
 			background-image : url(${svgHref(svgCircleSpinner)});
 			${spinnerStyleRules}
@@ -2803,71 +3228,72 @@ const getGlobalStyleRules = function(domain) {
 			justify-content : center;
 		}`,
 
-		`:root.${galk['domain-yandere']} .${thumbClass} {
-			display : flex !important; /* thumbnails nested in <li> */
-		}`,
-
-		`:root.${galk['domain-e621']} .${thumbClass} > .post-score {
-			margin-top : unset !important;
-			margin-bottom : unset !important;
-		}`,
-
-		`.${thumbClass} > .${galk['thumb-overlay']} {
+		`.${galk.thumbOverlay} {
 			display : flex;
 			flex-direction : column;
 			position : absolute;
-			z-index : 32767;
+			z-index : 32767; /* to ensure it covers type-badge on e621 */
 			top : 0;
 			left : 0;
 			bottom : 0;
 			right : 0;
 		}`,
 
-		`.${thumbClass} > .${galk['thumb-overlay']} > * {
-			display : block;
+		`.${galk.thumbOverlay} > * {
 			flex-grow : 1;
 		}`,
 
-		`.${thumbClass} > .${galk['thumb-overlay']} > a {
+		`.${galk.thumbOverlay} > a {
 			background-position : center;
 			background-repeat : no-repeat;
 			background-size : 30%;
 			opacity : 0.7;
 		}`,
 
-		`.${thumbClass} > .${galk['thumb-overlay']}
-			> a.${galk['thumb-ex-link']}:hover
-		{
+		`.${galk.thumbOverlay} > a.${galk.postPage}:hover {
 			background-image : url(${svgHref(svgCircleLink)});
-			background-color : var(--${galk['c-ex-link']});
+			background-color : var(--${galk.cExLink});
 		}`,
 
-		`.${thumbClass} > .${galk['thumb-overlay']}
-			> a.${galk['thumb-in-link']}:hover,
-		.${thumbClass}.${galk.selected} > .${galk['thumb-overlay']}
-			> a.${galk['thumb-in-link']}
+		`.${galk.thumbOverlay} > a.${galk.open}:hover,
+		.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}
 		{
 			background-image : url(${svgCircleArrowDownHref});
-			background-color : var(--${galk['c-iv-action']});
+			background-color : var(--${galk.cIvAction});
 		}`,
 
-		`.${thumbClass}.${galk.selected} > .${galk['thumb-overlay']}
-			> a.${galk['thumb-in-link']}:hover
-		{
+		`.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}:hover {
 			background-image : url(${svgCircleArrowUpHref});
+		}`,
+
+		`:root.${galk.domainKind}-moebooru .${thumbClass} {
+			display : flex !important; /* thumbnails nested in <li> */
+		}`,
+
+		`:root.${galk.domainName}-e621 .${thumbClass} > .post-score {
+			margin-top : unset !important;
+			margin-bottom : unset !important;
+		}`,
+
+		/* fix type-badge position on e621: */
+		`:root.${galk.domainName}-e621 .${thumbClass} > a {
+			position : relative;
+		}`,
+		`:root.${galk.domainName}-e621 .${thumbClass} > a > .type-badge {
+			left : -12px;
 		}`,
 
 		/* --- animation --- */
 
-		`.${galk['animate-to-hidden']} {
-			animation-name : ${galk['to-hidden']};
+		`.${galk.animateToHidden} {
+			animation-name : ${galk.toHidden};
 			animation-iteration-count : 1;
 			animation-duration : 0.2s;
 			animation-timing-function : linear;
 			animation-fill-mode : forwards;
 		}`,
 
-		`@keyframes ${galk['to-hidden']} {
+		`@keyframes ${galk.toHidden} {
 			from {}
 			to {
 				visibility : hidden;
@@ -2882,8 +3308,7 @@ const getGlobalStyleRules = function(domain) {
 
 		/* --- miscellaneous --- */
 
-		`:root.${galk['domain-name-r34xxx']},
-		:root.${galk['domain-name-r34xxx']} > body
+		`:root.${galk.domainName}-r34xxx, :root.${galk.domainName}-r34xxx > body
 		{
 			/* remove style on rule34's mobile layout which causes full-size
 			images to be cropped: */
@@ -3010,11 +3435,12 @@ const svgCircleSpinner =
 			to='360 0 0'
 			dur='1s'
 			repeatCount='indefinite'/> -->
-		<!-- svg animation is too expensive - use css animation instead -->
+		<!-- svg animation is too expensive; use css animation instead -->
 	</svg>`;
 
 const svgCircleNote =
 	`<svg xmlns='http://www.w3.org/2000/svg' width='72' height='72'>
+		<!-- solid circle, transparent icon -->
 		<path fill='#fff' d='M36 0A36 36 0 0 0 0 36a36 36 0 0 0 36 36 36 36 0
 			0 0 36-36A36 36 0 0 0 36 0zm14.727 18.45l2.54 29.048-2.945
 			3.51-29.049 2.543-2.54-29.049 2.945-3.51 29.049-2.543zM35.563
@@ -3024,6 +3450,7 @@ const svgCircleNote =
 
 /*const svgCircleNote =
 	`<svg xmlns='http://www.w3.org/2000/svg' width='72' height='72'>
+		<!-- transparent circle, solid icon -->
 		<path fill='#fff' d='M36 0C16.118 0 0 16.118 0 36s16.118 36 36 36
 			36-16.118 36-36S55.882 0 36 0zm0 8.5A27.5 27.5 0 0 1 63.5 36 27.5
 			27.5 0 0 1 36 63.5 27.5 27.5 0 0 1 8.5 36 27.5 27.5 0 0 1 36
