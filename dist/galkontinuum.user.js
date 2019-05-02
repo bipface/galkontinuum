@@ -1,4 +1,3 @@
-[galkontinuum] launching as command-line operation ...
 ﻿// ==UserScript==
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
@@ -278,7 +277,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.04.18",
-	"version_name": "2019.04.18 (e335ca6ba82ff7441744d8d95888c690b6d7d96a)",
+	"version_name": "2019.04.18 (62baf6117797151a820aab7e91fbbff71b257146)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -2847,35 +2846,43 @@ const enforce = function(cond, msg = `enforcement failed`) {
 	return cond;
 };
 
+const consoleInstance =
+	runtime === `nodejs`
+		? new globalObj.console.Console({
+			/* all output to stderr: */
+			stdout : process.stderr,
+			stderr : process.stderr,})
+		: globalObj.console;
+
 const assert = function(cond, msg) {
 	if (!cond) {
 		debugger;
-		console.assert(cond,
+		consoleInstance.assert(cond,
 			...(runtime === `browser` ? [`assertion failed:`] : []),
 			...(msg ? [msg] : []));
-		console.trace();
+		consoleInstance.trace();
 		throw new Error(`${msg || 'assertion failed'}`);
 	};
 };
 
 const log = function(...xs) {
-	console.log(`[${namespace}]`, ...xs);
+	consoleInstance.log(`[${namespace}]`, ...xs);
 };
 
 const logInfo = function(...xs) {
-	console.info(`[${namespace}]`, ...xs);
+	consoleInstance.info(`[${namespace}]`, ...xs);
 };
 
 const logWarn = function(...xs) {
-	console.warn(`[${namespace}]`, ...xs);
+	consoleInstance.warn(`[${namespace}]`, ...xs);
 };
 
 const logError = function(...xs) {
-	console.error(`[${namespace}]`, ...xs);
+	consoleInstance.error(`[${namespace}]`, ...xs);
 };
 
 const logDebug = function(...xs) {
-	dbg && console.debug(`[${namespace}]`, ...xs);
+	dbg && consoleInstance.debug(`[${namespace}]`, ...xs);
 };
 
 /* --- styles --- */

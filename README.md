@@ -1,5 +1,4 @@
 [![Build Status](https://travis-ci.com/bipface/galkontinuum.svg?branch=master)](https://travis-ci.com/bipface/galkontinuum)
-[galkontinuum] launching as command-line operation ...
 # Galkontinuum
 Galkontinuum is a [userscript][wiki userscript] which enables slideshow-style
 browsing of search results on the Booru family of sites.
