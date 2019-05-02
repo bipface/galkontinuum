@@ -2813,35 +2813,43 @@ const enforce = function(cond, msg = `enforcement failed`) {
 	return cond;
 };
 
+const consoleInstance =
+	runtime === `nodejs`
+		? new globalObj.console.Console({
+			/* all output to stderr: */
+			stdout : process.stderr,
+			stderr : process.stderr,})
+		: globalObj.console;
+
 const assert = function(cond, msg) {
 	if (!cond) {
 		debugger;
-		console.assert(cond,
+		consoleInstance.assert(cond,
 			...(runtime === `browser` ? [`assertion failed:`] : []),
 			...(msg ? [msg] : []));
-		console.trace();
+		consoleInstance.trace();
 		throw new Error(`${msg || 'assertion failed'}`);
 	};
 };
 
 const log = function(...xs) {
-	console.log(`[${namespace}]`, ...xs);
+	consoleInstance.log(`[${namespace}]`, ...xs);
 };
 
 const logInfo = function(...xs) {
-	console.info(`[${namespace}]`, ...xs);
+	consoleInstance.info(`[${namespace}]`, ...xs);
 };
 
 const logWarn = function(...xs) {
-	console.warn(`[${namespace}]`, ...xs);
+	consoleInstance.warn(`[${namespace}]`, ...xs);
 };
 
 const logError = function(...xs) {
-	console.error(`[${namespace}]`, ...xs);
+	consoleInstance.error(`[${namespace}]`, ...xs);
 };
 
 const logDebug = function(...xs) {
-	dbg && console.debug(`[${namespace}]`, ...xs);
+	dbg && consoleInstance.debug(`[${namespace}]`, ...xs);
 };
 
 /* --- styles --- */
