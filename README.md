@@ -12,6 +12,7 @@ compatible forks such as e621 and Moebooru.
 
 Each post's thumbnail element will now have two buttons placed over it as shown
 below. The top is the usual link to the post's page.
+
 ![Thumbnail overlay][thumb overlay anim]
 
 ### Media Panel
@@ -45,9 +46,11 @@ Be aware that the script will not update automatically when installed this way.
 2. Visit `chrome://extensions`.
 
 3. Enable the **Developer mode** option and choose **Load unpacked**.
+
 ![Load unpacked][chrome load unpacked]
 
 4. Select the directory containing the downloaded files.
+
 ![Select Folder][chrome select folder]
 
 ## Limitations
