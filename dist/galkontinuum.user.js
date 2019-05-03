@@ -28,6 +28,18 @@ browsing of search results on the Booru family of sites.
 It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
 compatible forks such as e621 and Moebooru.
 
+## Basic Features
+
+### Thumbnail Overlay
+
+Each post's thumbnail element will now have two buttons placed over it as shown
+below. The top is the usual link to the post's page.
+![Thumbnail overlay][thumb overlay anim]
+
+### Media Panel
+
+.
+
 ## Installation
 
 ### Requirements
@@ -85,9 +97,9 @@ when 6 search terms are used, navigation in one or both directions may fail due
 to inadequacies in the \`/post/index\` API requiring an additional tags to be
 inserted.
 
-- On Danbooru-based sites, it is suspected that only up to 1000 notes will be
-shown on any single post. Currently the only post known to have over 1000 notes
-is [#951241][danbooru post 1k notes] on Danbooru.
+- On Danbooru-based sites, only up to 1000 notes will be shown on any single
+post. Currently the only post known to have over 1000 notes is
+[#951241][danbooru post 1k notes] on Danbooru.
 
 - Posts with an ID less than zero or greater than 2147483647 will not be
 recognised. It is unknown whether there are any boorus with IDs outside this
@@ -95,13 +107,16 @@ range.
 
 [dist galk]: ${downloadHref}
 [dist manif]: ${(new URL('manifest.json', downloadHref)).href}
+
 [wiki userscript]: https://en.wikipedia.org/wiki/Userscript
 [greasemonkey]: https://www.greasespot.net/
 [tampermonkey]: https://tampermonkey.net/
-[chrome load unpacked]: https://i.imgur.com/RDu11ts.png
-[chrome select folder]: https://i.imgur.com/mvJnMHQ.png
 [danbooru wiki censored tags]: https://danbooru.donmai.us/wiki_pages/84990
 [danbooru post 1k notes]: https://danbooru.donmai.us/posts/951241
+
+[thumb overlay anim]: https://i.imgur.com/ueGF43J.gif
+[chrome load unpacked]: https://i.imgur.com/RDu11ts.png
+[chrome select folder]: https://i.imgur.com/mvJnMHQ.png
 `;
 
 /*
@@ -283,7 +298,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.04.18",
-	"version_name": "2019.04.18 (e5ae3d970d54551af3485c78a29aaa1c3187bfd2)",
+	"version_name": "2019.04.18 (bd393bf817d805336cd221e0f6c713a8894a4338)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
