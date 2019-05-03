@@ -34,6 +34,7 @@ compatible forks such as e621 and Moebooru.
 
 Each post's thumbnail element will now have two buttons placed over it as shown
 below. The top is the usual link to the post's page.
+
 ![Thumbnail overlay][thumb overlay anim]
 
 ### Media Panel
@@ -67,9 +68,11 @@ Be aware that the script will not update automatically when installed this way.
 2. Visit \`chrome://extensions\`.
 
 3. Enable the **Developer mode** option and choose **Load unpacked**.
+
 ![Load unpacked][chrome load unpacked]
 
 4. Select the directory containing the downloaded files.
+
 ![Select Folder][chrome select folder]
 
 ## Limitations
@@ -158,23 +161,16 @@ known issues:
 
 proposed enhancements:
 
-	- new button arrangement
-		[scale | ← | ↑ | → | notes]
-		•
-		[reload | attr | link | cfg | help]
 	- reload button
 	- help button
 	- property sheet
-	- fetch multiple results in navigation API requests
 	- navigation on current page without API requests
 	- spinner on the thumbnail overlay
-	- more things in the footer bar
 	- click the image for next/prev/scale
-	- post pages: add a link back to the gallery page on which it appears
+	- post pages: add a link back to the gallery page on which it appears (?)
 	- settings for showing fullsize/thumbnail/sample
 		loading full-size images may not always be desirable
 		(e.g. mobile browsing with small data allowance)
-	- more diagnostic logging
 
 test cases:
 
@@ -740,13 +736,13 @@ const ensureInlineView = function(state, doc, parentElem) {
 			<a title='Next' class='${galk.next}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='' class='${galk.postPage}'>
+			<a title='Close' class='${galk.close}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
 			<a title='Previous' class='${galk.prev}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Close' class='${galk.close}'>
+			<a title='Toggle Notes' class='${galk.notes} ${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 		</header>
 
@@ -781,16 +777,16 @@ const ensureInlineView = function(state, doc, parentElem) {
 		</section>
 
 		<footer class='${galk.ivCtrlBar}'>
-			<a title='Toggle Notes' class='${galk.notes} ${galk.disabled}'>
+			<a title='Reload' class='${galk.reload}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
 			<a title='Attributes' class='${galk.meta} ${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a class='${galk.disabled}'>
+			<a class='${galk.postPage}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Reload' class='${galk.reload}'>
+			<a title='Options' class='${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
 			<a title='Help' class='${galk.help}'>
@@ -1720,7 +1716,7 @@ const cacheSearchResults = function(
 	if (direction === -1) {
 		c.results = Int32Array.from(chain(
 			idsToCache,
-			c.results.subarray(fromOffset, -1)));
+			c.results.subarray(fromOffset, c.results.length)));
 	} else if (direction === 1) {
 		c.results = Int32Array.from(chain(
 			c.results.subarray(0, fromOffset + 1),
