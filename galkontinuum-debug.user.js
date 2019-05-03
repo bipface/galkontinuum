@@ -67,6 +67,10 @@ Be aware that the script will not update automatically when installed this way.
 - On Gelbooru-based sites, posts added within the last few minutes may fail to
 load due to the search database being out of sync with the main database.
 
+- Navigating through results is only possible if they are ordered by ID
+(ascending or descending). Note that on Moebooru-based sites, the default
+order is by timestamp, not by ID.
+
 - On Danbooru-based sites, [restricted posts][danbooru wiki censored tags]
 might not be excluded when navigating through results, despite being hidden in
 the thumbnail list on the page. These will most likely fail to load.
@@ -76,13 +80,14 @@ Working-around this issue is non-trival due to inadequacies in the
 - On Danbooru-based sites, navigation may be hindered or impossible when the
 maximum number of search terms is used.
 For example, searches on e621 containing more than 6 terms will result in an
-error message stating "You can only search up to 6 tags at once". When 6 search
-terms are used, forwards-navigation may fail due to inadequacies in the
-\`/post/index\` API requiring an additional tag to be inserted.
+error message stating "You can only search up to 6 tags at once". Therefore,
+when 6 search terms are used, navigation in one or both directions may fail due
+to inadequacies in the \`/post/index\` API requiring an additional tags to be
+inserted.
 
 - On Danbooru-based sites, it is suspected that only up to 1000 notes will be
-shown on any single post. It is unknown whether there are any posts with over
-1000 notes.
+shown on any single post. Currently the only post known to have over 1000 notes
+is [#951241][danbooru post 1k notes] on Danbooru.
 
 - Posts with an ID less than zero or greater than 2147483647 will not be
 recognised. It is unknown whether there are any boorus with IDs outside this
@@ -96,6 +101,7 @@ range.
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
 [danbooru wiki censored tags]: https://danbooru.donmai.us/wiki_pages/84990
+[danbooru post 1k notes]: https://danbooru.donmai.us/posts/951241
 `;
 
 /*
@@ -108,25 +114,21 @@ known issues:
 	- 6-term search limit on e621/moebooru
 		https://e621.net/post/index?tags=a+b+c+d+e+f+g
 	- swf videos not supported yet
-	- on e621 it seems only one id:* search term can be specified
-		test: https://e621.net/post/index.json?tags=id:500%20id:%3E1000%20order:id&limit=1
 	- probably won't work with danbooru's zip-player videos
 		test: https://danbooru.donmai.us/posts/3471696
 	- controls typically end up off-screen; hinders navigation by clicking
 		(mainly affects mobile browsing)
-	- can't navigate when search query includes sort:* / order:*
 	- scrollIntoView() can get erratic when navigating
 	- player appears with wrong dimensions before video starts loading
 	- navigating on danbooru does't skip posts that aren't visible to the
 		current user or that have status:deleted
 		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
-	- thumbnail appears even when full-size image loads from cache
-		(causes background 'flashing' when navigating
-		through images with transparent backgrounds)
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
 	- gelbooru: thumbnail overlay is exactly the size of the thumbnail itself:
 		https://i.imgur.com/YJjIzxt.png
+	- browser history doesn't work well on danbooru since they append ?q=…
+		to the post page hrefs
 	- tryParsePostId() imposes a much stricter syntax than the sites
 		themselves seem to,
 		for example,
@@ -149,7 +151,6 @@ proposed enhancements:
 	- help button
 	- property sheet
 	- fetch multiple results in navigation API requests
-	- add viewed posts to history (history.replaceState x2)
 	- navigation on current page without API requests
 	- spinner on the thumbnail overlay
 	- more things in the footer bar
@@ -200,12 +201,12 @@ test cases:
 		- navigating before/after current search results list (across pages)
 		- attempting to navigate before first item or after last item
 		- id: / sort: / order: search terms
+			on gel, last sort: applies, all id: apply
+			on dan, last order: applies, last id: applies
 		- 2 or more search terms (danbooru limitation)
 		- 6 or more search terms (e621 limitation)
 		- attempting to navigate with posts which aren't in solr database yet
 			(on gelbooru-type sites)
-		- navigate around, wait 1 minute for caches to expire, then
-			navigate some more
 
 	notes overlay:
 		- desktop
@@ -214,6 +215,11 @@ test cases:
 			https://danbooru.donmai.us/posts?tags=id:3339117
 			https://e621.net/post/index/?tags=id:1843616
 			https://rule34.xxx/?page=post&s=list&tags=id:2269258
+
+			over 500 notes:
+				https://danbooru.donmai.us/posts?tags=id%3A71230
+			over 1000 notes:
+				https://danbooru.donmai.us/posts?tags=id%3A951241
 
 	danbooru post statuses:
 		- visible: active, unmoderator, flagged, modqueue, pending
@@ -292,6 +298,10 @@ const runtime =
 		? `nodejs`
 	: undefined;
 
+const TypedArray = Object.getPrototypeOf(Uint8Array.prototype).constructor;
+if (!((new Uint8Array) instanceof TypedArray)) {
+	throw new Error(`failed to obtain TypedArray class`);};
+
 /* workaround for prototype.js (which redefines `window.Element`): */
 const Element =
 	runtime === `browser`
@@ -311,7 +321,7 @@ const test =
 		: () => {};
 
 const nodejsEntrypoint = async function(command, argJson) {
-	log(`launching as command-line operation ...`);
+	log(`launching as command-line operation …`);
 
 	let arg = tryParseJson(argJson);
 	enforce(typeof arg === `object`,
@@ -554,7 +564,7 @@ const createManifest = async function(srcLines,
 };
 
 const userscriptEntrypoint = function(doc) {
-	log(`launching as userscript ...`);
+	log(`launching as userscript …`);
 	dbg && runUnittests(unittests);
 
 	let url = tryParseHref(doc.location.href);
@@ -647,6 +657,7 @@ const applyToDocument = function(doc) {
 	let viewParent = getInlineViewParent(state, doc);
 	let view = ensureInlineView(state, doc, viewParent);
 	if (view !== null) {
+		view.addEventListener(galk.mediaViewing, onMediaViewing, false);
 		bindInlineView(state, doc, view);
 	} else {
 		logError(`failed to create inline-view panel`);};
@@ -659,6 +670,19 @@ const applyToDocument = function(doc) {
 
 	if (getDomain(state).name === `danbooru`) {
 		ensureForwardDanbooruTooltipEvents(state, doc);};
+};
+
+const onMediaViewing = function({detail : {state, postId}}) {
+	let postUrl = postPageUrl(state, postId);
+	if (postUrl === null) {
+		return;};
+
+	/* add the post page to the browser's history: */
+
+	let s = history.state;
+	let loc = location.href;
+	history.replaceState({}, ``, postUrl.href);
+	history.replaceState(s, ``, loc);
 };
 
 const getInlineViewParent = function(state, doc) {
@@ -686,6 +710,8 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 	if (parentElem === null) {
 		return null;};
+
+	log(`creating inline-view panel …`);
 
 	view = doc.createElement(`section`);
 	view.classList.add(galk.ivPanel);
@@ -766,6 +792,14 @@ const ensureInlineView = function(state, doc, parentElem) {
 const bindInlineView = async function(state, doc, view) {
 	dbg && assert(view instanceof HTMLElement);
 
+	log(`binding inline-view panel …`);
+
+	/* the galk.mediaViewing event will be emitted by the view element when the
+	main media element begins loading image data / video frames / etc.
+	(or immediately if it is already loaded)
+	event detail: {state, postId}
+	see dispatchMediaViewingEvent(…) */
+
 	view.dispatchEvent(new CustomEvent(galk.revoke));
 	let revoked;
 	{
@@ -807,6 +841,7 @@ const bindInlineView = async function(state, doc, view) {
 	if (isPostId(state.currentPostId)) {
 		view.hidden = false;
 	} else {
+		log(`currentPostId not defined; hiding inline-view panel …`);
 		view.hidden = true;
 		unbindContent();
 
@@ -820,11 +855,11 @@ const bindInlineView = async function(state, doc, view) {
 	let infoPromise = tryGetPostInfo(state, state.currentPostId);
 	let notesPromise = tryGetPostNotes(state, state.currentPostId);
 
-	if (await Promise.race([infoPromise, Promise.resolve(null)]) !== null) {
+	if (await Promise.race([infoPromise, Promise.resolve(null)]) === null) {
 		if (revoked()) {
 			return;};
 		log(`info for post #${state.currentPostId} is being retrieved`
-			+` asynchronously ...`);
+			+` asynchronously …`);
 		unbindContent();
 	};
 
@@ -858,7 +893,7 @@ const bindInlineView = async function(state, doc, view) {
 
 		thumbElem.classList.remove(galk.animateToHidden);
 		if (info.thumbnailHref) {
-			maybeSetAttr(thumbElem, `src`, info.thumbnailHref);
+			updateMediaAttr(thumbElem, `src`, info.thumbnailHref);
 			thumbElem.hidden = false;
 		} else {
 			thumbElem.hidden = true;
@@ -870,7 +905,7 @@ const bindInlineView = async function(state, doc, view) {
 			sampleElem.hidden = true;
 			sampleElem.removeAttribute(`src`);
 
-			maybeSetAttr(vidElem, `src`, info.mediaHref);
+			updateMediaAttr(vidElem, `src`, info.mediaHref);
 			vidElem.hidden = false;
 
 			//imgElem.addEventListener(`load`, ev => {
@@ -885,17 +920,32 @@ const bindInlineView = async function(state, doc, view) {
 			if (false) {//info.sampleHref) {
 				// disabled for now as it interferes with the alpha-channel
 
-				maybeSetAttr(sampleElem, `src`, info.sampleHref);
+				updateMediaAttr(sampleElem, `src`, info.sampleHref);
 				sampleElem.hidden = false;
 			} else {
 				sampleElem.hidden = true;
 				sampleElem.removeAttribute(`src`);};
 
-			maybeSetAttr(imgElem, `src`, info.mediaHref);
+			let viewingEventDispatched = false;
+			imgElem.addEventListener(`loadstart`, function f(ev) {
+				ev.currentTarget.removeEventListener(ev.type, f, false);
+				if (revoked()) {
+					return;};
+
+				log(`media (image) ${ev.type} event triggered`);
+
+				if (!viewingEventDispatched) {
+					dispatchMediaViewingEvent(state, view, info.postId);};
+			}, false);
+
+			updateMediaAttr(imgElem, `src`, info.mediaHref);
 
 			/* hide the resampled versions when the full image loads: */
 
 			let onLoaded = function() {
+				if (!viewingEventDispatched) {
+					dispatchMediaViewingEvent(state, view, info.postId);};
+
 				thumbElem.classList.add(galk.animateToHidden);
 				//sampleElem.hidden = true;
 				//sampleElem.removeAttribute(`src`);
@@ -919,7 +969,7 @@ const bindInlineView = async function(state, doc, view) {
 		/* placeholder image: */
 
 		/* use `srcset` as a workaround for easylist element hiding rules: */
-		maybeSetAttr(phldrElem, `srcset`,
+		updateMediaAttr(phldrElem, `srcset`,
 			svgDataHref(svgEmptyPlaceholder(info.width, info.height)));
 
 		{/* scroll to the placeholder when it loads: */
@@ -1027,6 +1077,12 @@ const onCloseInlineView = function(state, doc) {
 		`instant` /* smooth scroll can fail due to changing page height */);
 };
 
+const dispatchMediaViewingEvent = function(state, view, postId) {
+	log(`${galk.mediaViewing} event triggered`);
+	view.dispatchEvent(new CustomEvent(
+		galk.mediaViewing, {detail : {state, postId}}));
+};
+
 const clearNotesOverlay = function(ovr) {
 	while (ovr.hasChildNodes()) {
 		ovr.removeChild(ovr.firstChild);};
@@ -1036,6 +1092,8 @@ const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
 	dbg && assert(ovr instanceof Element);
 	dbg && assert(typeof postInfo === `object`);
 	dbg && assert(Array.isArray(notes));
+
+	log(`binding notes overlay (${notes.length} notes) …`);
 
 	clearNotesOverlay(ovr);
 
@@ -1589,14 +1647,14 @@ const ensureSearchResultsCache = function(searchExpr) {
 	if (searchResultsCache === null
 		|| !searchExprEquiv(searchExpr, searchResultsCache.searchExpr))
 	{
-		log(`search expression changed; (re)initialising results cache ...`);
+		log(`search expression changed; (re)initialising results cache …`);
 		searchResultsCache = {
 			searchExpr,
-			results : [],};
+			results : Int32Array.of(),};
 	};
 
 	dbg && assert(typeof searchResultsCache.searchExpr === `object`);
-	dbg && assert(Array.isArray(searchResultsCache.results));
+	dbg && assert(searchResultsCache.results instanceof TypedArray);
 
 	return searchResultsCache;
 };
@@ -1607,7 +1665,7 @@ const getCachedSearchResult = function(searchExpr, fromId, direction) {
 
 	let c = ensureSearchResultsCache(searchExpr);
 	dbg && assert(typeof c === `object`);
-	dbg && assert(Array.isArray(c.results));
+	dbg && assert(c.results instanceof TypedArray);
 
 	let fromOffset = c.results.indexOf(fromId);
 
@@ -1634,23 +1692,23 @@ const cacheSearchResults = function(
 	log(`before: search results cache contains`
 		+` ${((searchResultsCache || {}).results || []).length} entries`);
 	log(`adding ${idsToCache.length} postIds to search results cache;`
-		+` fromId: ${fromId}, direction: ${direction} ...`);
+		+` fromId: ${fromId}, direction: ${direction} …`);
 
 	let c = ensureSearchResultsCache(searchExpr);
 	dbg && assert(typeof c === `object`);
 
 	let fromOffset = c.results.indexOf(fromId);
 	if (fromOffset < 0) {
-		c.results = [fromId];
+		c.results = Int32Array.of(fromId);
 		fromOffset = 0;};
 
 	if (direction === -1) {
-		c.results = Array.from(chain(
+		c.results = Int32Array.from(chain(
 			idsToCache,
-			subseq(c.results, fromOffset, -1)));
+			c.results.subarray(fromOffset, -1)));
 	} else if (direction === 1) {
-		c.results = Array.from(chain(
-			subseq(c.results, 0, fromOffset + 1),
+		c.results = Int32Array.from(chain(
+			c.results.subarray(0, fromOffset + 1),
 			idsToCache));
 	};
 
@@ -2575,7 +2633,7 @@ const maybeScrollIntoView = function(
 		|| rect.top < 0
 		|| rect.bottom > viewport.innerHeight)
 	{
-		log(`scrolling to element <${el.tagName}> ...`);
+		log(`scrolling to element <${el.tagName}> …`);
 		el.scrollIntoView({behavior});
 	} else {
 		log(`element <${el.tagName}> already within viewport; not scrolling`,
@@ -2583,14 +2641,21 @@ const maybeScrollIntoView = function(
 	};
 };
 
-const maybeSetAttr = function(el, attr, value) {
+const updateMediaAttr = function(el, attr, value) {
 	dbg && assert(el instanceof Element);
+	dbg && assert(typeof attr === `string`);
+	dbg && assert(typeof value === `string`);
 
 	/* important for <video> elements where even setting `src` to the same value
 	may cause the video playback to be reset */
 
 	if (el.getAttribute(attr) !== value) {
-		el.setAttribute(attr, value);};
+		/* must remove the attribute first, otherwise <img> element may leave
+		the previous image on the page until the new image finishes loading: */
+		el.removeAttribute(attr);
+
+		el.setAttribute(attr, value);
+	};
 };
 
 const sequiv = function(xs, ys, pred = Object.is) {
