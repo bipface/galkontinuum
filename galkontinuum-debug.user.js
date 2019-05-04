@@ -28,18 +28,38 @@ browsing of search results on the Booru family of sites.
 It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
 compatible forks such as e621 and Moebooru.
 
-## Basic Features
+## Overview
 
 ### Thumbnail Overlay
 
 Each post's thumbnail element will now have two buttons placed over it as shown
-below. The top is the usual link to the post's page.
+below. The upper button is the usual link to the post's page. The lower button
+loads this post in the *media panel* (described in the next section), without
+leaving the current page.
 
 ![Thumbnail overlay][thumb overlay anim]
 
 ### Media Panel
 
-.
+The media panel appears below the thumbnail list and provides controls to
+navigate through the sequence of results for the current search.
+
+![Media panel][media panel numbered]
+
+1. Toggle notes overlay
+2. Previous post
+3. Toggle scale mode (fit-to-screen / full-size)
+4. Next post
+5. Close media panel and return to thumbnail
+6. Unused
+7. Unused
+8. Link to post page
+9. Unused
+10. Toggle help/about panel
+
+### Notes Overlay
+
+(todo)
 
 ## Installation
 
@@ -118,6 +138,7 @@ range.
 [danbooru post 1k notes]: https://danbooru.donmai.us/posts/951241
 
 [thumb overlay anim]: https://i.imgur.com/ueGF43J.gif
+[media panel numbered]: https://i.imgur.com/MtdHz9U.gif
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
 `;
@@ -126,6 +147,9 @@ range.
 
 known issues:
 
+	- blacklist may interfere on moebooru
+	- nav still flaky on moebooru when searchexpr = order:-id
+	- thumbs style on moebooru
 	- buttons too small on e621 on mobile
 	- yande.re: gallary results are in an unknown order
 	- moebooru is_held flag (see below)
@@ -593,14 +617,13 @@ const userscriptEntrypoint = function(doc) {
 		`document not loaded`);
 
 	doc.defaultView.addEventListener(
-		`keydown`,
-		onKeyDownGlobal,
-		true);
+		`keydown`, onKeyDownGlobal, true);
 
 	doc.defaultView.addEventListener(
-		`hashchange`,
-		ev => {applyToDocument(doc);},
-		false);
+		`hashchange`, ev => {applyToDocument(doc);}, false);
+
+	doc.defaultView.addEventListener(
+		galk.reload, ev => {applyToDocument(doc);}, false);
 
 	applyToDocument(doc);
 };
@@ -635,13 +658,13 @@ const onKeyDownGlobal = function(ev) {
 	let doc = ev.target.ownerDocument;
 
 	if (ev.key === `ArrowRight` || ev.key === `Right`) {
-		let btn = getSingleElemByClass(doc, galk.prev);
+		let btn = getSingleElemByClass(doc, galk.next);
 		if (btn instanceof HTMLElement) {
 			btn.click();
 			ev.stopPropagation();};
 
 	} else if (ev.key === `ArrowLeft` || ev.key === `Left`) {
-		let btn = getSingleElemByClass(doc, galk.next);
+		let btn = getSingleElemByClass(doc, galk.prev);
 		if (btn instanceof HTMLElement) {
 			btn.click();
 			ev.stopPropagation();};
@@ -730,6 +753,12 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 	view.insertAdjacentHTML(`beforeend`,
 		`<header class='${galk.ivCtrlBar}'>
+			<a title='Toggle Notes' class='${galk.notes} ${galk.disabled}'>
+				<figure class='${galk.btnIcon}'></figure></a>
+
+			<a title='Previous' class='${galk.prev}'>
+				<figure class='${galk.btnIcon}'></figure></a>
+
 			<a title='Toggle Size' class='${galk.scale}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
@@ -737,12 +766,6 @@ const ensureInlineView = function(state, doc, parentElem) {
 				<figure class='${galk.btnIcon}'></figure></a>
 
 			<a title='Close' class='${galk.close}'>
-				<figure class='${galk.btnIcon}'></figure></a>
-
-			<a title='Previous' class='${galk.prev}'>
-				<figure class='${galk.btnIcon}'></figure></a>
-
-			<a title='Toggle Notes' class='${galk.notes} ${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 		</header>
 
@@ -754,6 +777,12 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 				<aside class='${galk.notesOverlay}'></aside>
 
+				<!--nav class='${galk.ctrlOverlay}'>
+					<a class='${galk.prev}'></a>
+					<a class='${galk.scale}'></a>
+					<a class='${galk.next}'></a>
+				</nav-->
+
 				<img class='${galk.media}' hidden=''/>
 
 				<video class='${galk.media}' hidden=''
@@ -761,8 +790,7 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 				<object class='${galk.media}'
 					type='application/x-shockwave-flash'
-					typemustmatch=''
-					hidden=''>
+					typemustmatch='' hidden=''>
 					<param name='movie'/>
 				</object>
 
@@ -777,7 +805,7 @@ const ensureInlineView = function(state, doc, parentElem) {
 		</section>
 
 		<footer class='${galk.ivCtrlBar}'>
-			<a title='Reload' class='${galk.reload}'>
+			<a title='' class='${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
 			<a title='Attributes' class='${galk.meta} ${galk.disabled}'>
@@ -1073,12 +1101,26 @@ const bindInlineView = async function(state, doc, view) {
 			onCloseInlineView(state, doc);};
 	}, false);
 
-	/* prev and next buttons:
-	(directions are intentionally inverted) */
+	/* prev and next buttons: */
 	bindNavigationButton(revoked, state, doc,
-		enforce(getSingleElemByClass(view, galk.prev)), 1);
+		enforce(getSingleElemByClass(view, galk.prev)), -1);
 	bindNavigationButton(revoked, state, doc,
-		enforce(getSingleElemByClass(view, galk.next)), -1);
+		enforce(getSingleElemByClass(view, galk.next)), 1);
+};
+
+const destroyInlineView = function(state, view) {
+	dbg && assert(view instanceof HTMLElement);
+	view.dispatchEvent(new CustomEvent(galk.revoke));
+	view.remove();
+};
+
+const onReloadInlineView = function(state, doc, view) {
+	/* clear caches and remove controls: */
+	notesCache.clear();
+	searchResultsCache = null;
+	destroyInlineView(state, view);
+
+	doc.defaultView.dispatchEvent(new CustomEvent(galk.reload));
 };
 
 const onCloseInlineView = function(state, doc) {
@@ -1409,7 +1451,7 @@ const parseSearchExprString = function(state, exprString = ``) {
 
 	switch (domain.kind) {
 		case `danbooru` :
-			if (statusTerm === undefined) {
+			if (statusTerm === undefined && domain.subkind !== `moebooru`) {
 				/* implicit default if no other status filter is specified: */
 				statusTerm = `-deleted`;};
 
@@ -1784,8 +1826,12 @@ const tryNavigatePostId = async function(
 		reportInvalidResponse(requUrl.href, xhr);
 		return undefined;};
 
-	let ids = new Int32Array(infos.length);
-	for (let i = 0, n = infos.length; i < n; ++i) {
+	let n = infos.length;
+	log(`post navigation api request yielded ${n} results;`
+		+` fromId: ${fromPostId}, direction: ${direction}`);
+
+	let ids = new Int32Array(n);
+	for (let i = 0; i < n; ++i) {
 		let info = infos[i];
 		dbg && assert(isPostId(info.postId));
 
@@ -2740,125 +2786,6 @@ const chain = function(...xss) {
 		xss,};
 };
 
-const subseqIterProto = {
-	_initialise() {
-		this.initialised = true;
-		let {start, end, xs} = this;
-
-		if (this.len >= 0) {
-			/* known length (assumes .length is correct) */
-
-			if (start < end) {
-				let iter = xs[Symbol.iterator]();
-
-				/* advance iter to start offset: */
-				for (let i = 0; i < start; ++i) {
-					iter.next();};
-
-				this.n = end - start;
-				this.iter = iter;
-			};
-
-		} else {
-			let iter = xs[Symbol.iterator]();
-
-			/* advance iter to start offset: */
-			let skipN = Math.min(start, Infinity * (end - start));
-			let i = 0;
-			for (; i < skipN; ++i) {
-				let next = iter.next();
-				if (next.done) {
-					/* reached the end of the source;
-					ensure next() is not called again */
-					i = end;
-					this.doneNext = next;
-					break;
-				};
-			};
-			this.n = end - i;
-			this.iter = iter;
-		};
-	},
-
-	next() {
-		if (!this.initialised) {
-			this._initialise();};
-
-		if (this.n > 0) {
-			let rv = this.iter.next();
-			--this.n;
-			if (rv.done) {
-				this.n = 0;
-				this.doneNext = rv;
-			};
-			return rv;
-		} else {
-			return this.doneNext;};
-	},
-
-	[Symbol.iterator]() {return this;},
-};
-
-const subseqResultProto = {
-	get length() {
-		return this.len >= 0 ? this.len : undefined;
-	},
-
-	[Symbol.iterator]() {
-		return {
-			__proto__ : subseqIterProto,
-			initialised : false,
-			xs : this.xs,
-			n : 0,
-			iter : null,
-			doneNext : {done : true},
-			start : this.start,
-			end : this.end,
-			len : this.len,};
-	},
-};
-
-const subseq = function(xs, start = 0, end = Infinity) {
-	dbg && assert(isIterable(xs));
-	dbg && assert(typeof start === `number`);
-	dbg && assert(typeof end === `number`);
-
-	start = Math.trunc(start);
-	end = Math.trunc(end);
-
-	let len = lengthOf(xs);
-	if (len >= 0) {
-		start = normaliseIntSliceTerm(start, len);
-		end = normaliseIntSliceTerm(end, len);
-		len = start < end ? end - start : 0;
-	} else if (start < 0 || end < 0) {
-		throw new RangeError(`can't slice a sequence of unknown length `
-			+`using negative indices`);};
-
-	return {
-		__proto__ : subseqResultProto,
-		xs,
-		start,
-		end,
-		len,};
-};
-
-const normaliseIntSliceTerm = function(val, len) {
-	dbg && assert(typeof len === `number`
-		&& Number.isSafeInteger(len) && len >= 0);
-
-	let n = +val;
-
-	if (!(n >= 0)) {
-		n += len;
-		if (!(n >= 0)) {
-			n = 0;};
-	} else if (n > len) {
-		n = len;};
-
-	return n;
-};
-
 const lengthOf = function(xs) {
 	if (typeof xs === `string`) {
 		/* strings are utf-16, so calculating length is an O(n) operation */
@@ -3208,12 +3135,6 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgHref(svgCircleContract)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.prev}.${galk.ready}
-			> .${galk.btnIcon}
-		{
-			background-image : url(${svgCircleArrowRightHref});
-		}`,
-
 		`.${galk.ivCtrlBar} > .${galk.postPage}:hover {
 			background-color : var(--${galk.cExLink});
 		}`,
@@ -3222,10 +3143,16 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgHref(svgCircleLink)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.next}.${galk.ready}
+		`.${galk.ivCtrlBar} > .${galk.prev}.${galk.ready}
 			> .${galk.btnIcon}
 		{
 			background-image : url(${svgCircleArrowLeftHref});
+		}`,
+
+		`.${galk.ivCtrlBar} > .${galk.next}.${galk.ready}
+			> .${galk.btnIcon}
+		{
+			background-image : url(${svgCircleArrowRightHref});
 		}`,
 
 		`.${galk.ivCtrlBar} > .${galk.close}:hover {
@@ -3236,7 +3163,13 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgCircleArrowUpHref});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.notes} > .${galk.btnIcon} {
+		`.${galk.ivCtrlBar} > .${galk.help} > .${galk.btnIcon} {
+			background-image : url(${svgHref(svgCircleQuestion)});
+		}`,
+
+		`.${galk.ivCtrlBar} > .${galk.notes}:not(.${galk.disabled})
+			> .${galk.btnIcon}
+		{
 			background-image : url(${svgHref(svgCircleNote)});
 		}`,
 
@@ -3316,7 +3249,7 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgCircleArrowUpHref});
 		}`,
 
-		`:root.${galk.domainKind}-moebooru .${thumbClass} {
+		`:root.${galk.domainSubkind}-moebooru .${thumbClass} {
 			display : flex !important; /* thumbnails nested in <li> */
 		}`,
 
@@ -3623,6 +3556,27 @@ const svgCircleContract =
 			`205 0 0 0 35.999 0zm2.877 11.422l7.685.453v13.562l14.016.451.451 `+
 			`7.686H38.425zM10.972 38.425h22.603l-.451 22.153-7.686-.453V46.562`+
 			`l-14.015-.451z'/>
+	</svg>`;
+
+const svgCircleQuestion =
+	`<svg xmlns='http://www.w3.org/2000/svg' width='72' height='72'>
+		<path fill='#fff' d='M36 0A36 36 0 0 0 0 36a36 36 0 0 0 36 36 36 36 0 0
+			0 36-36A36 36 0 0 0 36 0zm.88 11.16c3.34 0 6.3.59 8.85 1.77a13.94
+			13.94 0 0 1 5.91 4.76c1.4 2.01 2.11 4.2 2.11 6.56 0 1.86-.4 3.49-1.2
+			4.9a14.8 14.8 0 0 1-2.84 3.63c-1.09 1.01-3.05 2.72-5.88
+			5.12-.78.68-1.42 1.28-1.9 1.8a6.94 6.94 0 0 0-1.6 2.7c-.1.42-.3
+			1.16-.54 2.23-.44 2.28-1.81 3.41-4.12 3.41a4.4 4.4 0 0
+			1-3.04-1.11c-.8-.75-1.21-1.85-1.21-3.32 0-1.83.3-3.42.9-4.75.6-1.36
+			1.4-2.54 2.38-3.55 1-1.03 2.33-2.24 4.01-3.64a70.99 70.99 0 0 0
+			3.18-2.76 9.15 9.15 0 0 0 1.66-2.1c.46-.77.7-1.6.7-2.5
+			0-1.74-.7-3.22-2.08-4.42a7.69 7.69 0 0 0-5.29-1.81c-2.53
+			0-4.4.61-5.6 1.84-1.2 1.2-2.21 2.98-3.04 5.35-.79 2.47-2.27
+			3.7-4.46 3.7a4.6 4.6 0 0 1-3.28-1.27 3.95 3.95 0 0
+			1-1.32-2.82c0-2.08.7-4.19 2.11-6.3a15.9 15.9 0 0 1 6.15-5.32 20.2
+			20.2 0 0 1 9.44-2.1zm-.82 39.87c1.59 0 2.93.54 4.01 1.63a5.46 5.46
+			0 0 1 1.63 4.02c0 1.76-.57 3.15-1.7 4.16a5.76 5.76 0 0 1-3.94
+			1.52c-1.54 0-2.9-.5-4.06-1.48a5.34 5.34 0 0 1-1.7-4.2 5.63 5.63 0 0
+			1 5.76-5.64z'/>
 	</svg>`;
 
 /* -------------------------------------------------------------------------- */
