@@ -6,18 +6,38 @@ browsing of search results on the Booru family of sites.
 It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
 compatible forks such as e621 and Moebooru.
 
-## Basic Features
+## Overview
 
 ### Thumbnail Overlay
 
 Each post's thumbnail element will now have two buttons placed over it as shown
-below. The top is the usual link to the post's page.
+below. The upper button is the usual link to the post's page. The lower button
+loads this post in the *media panel* (described in the next section), without
+leaving the current page.
 
 ![Thumbnail overlay][thumb overlay anim]
 
 ### Media Panel
 
-.
+The media panel appears below the thumbnail list and provides controls to
+navigate through the sequence of results for the current search.
+
+![Media panel][media panel numbered]
+
+1. Toggle notes overlay
+2. Previous post
+3. Toggle scale mode (fit-to-screen / full-size)
+4. Next post
+5. Close media panel and return to thumbnail
+6. Unused
+7. Unused
+8. Link to post page
+9. Unused
+10. Toggle help/about panel
+
+### Notes Overlay
+
+(todo)
 
 ## Installation
 
@@ -96,5 +116,6 @@ range.
 [danbooru post 1k notes]: https://danbooru.donmai.us/posts/951241
 
 [thumb overlay anim]: https://i.imgur.com/ueGF43J.gif
+[media panel numbered]: https://i.imgur.com/MtdHz9U.gif
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
