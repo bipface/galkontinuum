@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.04.18
+// @version		2019.05.04
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL https://github.com/bipface/galkontinuum/tree/master/#readme
 // @downloadURL https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
@@ -147,6 +147,8 @@ range.
 
 known issues:
 
+	- note tooltip may appear off-screen
+		(e.g. https://e621.net/post/index?tags=id:1002)
 	- blacklist may interfere on moebooru
 	- nav still flaky on moebooru when searchexpr = order:-id
 	- thumbs style on moebooru
@@ -317,8 +319,8 @@ const manifest = {
 	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
-	"version": "2019.04.18",
-	"version_name": "2019.04.18 (821b602be1e7fbf57a66fbab2269a179ec181d9d)",
+	"version": "2019.05.04",
+	"version_name": "2019.05.04 (6b649e87cf0d0f6c3443cd847f0706365535feee)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
