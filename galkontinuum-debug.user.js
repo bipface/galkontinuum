@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.04.18
+// @version		2019.05.04
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL	.
 // @downloadURL	.
@@ -147,6 +147,8 @@ range.
 
 known issues:
 
+	- note tooltip may appear off-screen
+		(e.g. https://e621.net/post/index?tags=id:1002)
 	- blacklist may interfere on moebooru
 	- nav still flaky on moebooru when searchexpr = order:-id
 	- thumbs style on moebooru
