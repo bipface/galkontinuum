@@ -106,6 +106,9 @@ load due to the search database being out of sync with the main database.
 (ascending or descending). Note that on Moebooru-based sites, the default
 order is by timestamp, not by ID.
 
+- Overlay controls are disabled for SWFs, as they could obstruct pointer
+interaction.
+
 - On Danbooru-based sites, [restricted posts][danbooru wiki censored tags]
 might not be excluded when navigating through results, despite being hidden in
 the thumbnail list on the page. These will most likely fail to load.
@@ -152,15 +155,10 @@ known issues:
 		(e.g. https://e621.net/post/index?tags=id:1002)
 	- blacklist may interfere on moebooru
 	- buttons too small on e621 on mobile
-	- 6-term search limit on e621/moebooru
-		https://e621.net/post/index?tags=a+b+c+d+e+f+g
-	- swf videos not supported yet
 	- probably won't work with danbooru's zip-player videos
 		test: https://danbooru.donmai.us/posts/3471696
-	- scrollIntoView() can get erratic when navigating
 	- player appears with wrong dimensions before video starts loading
-	- navigating on danbooru does't skip posts that aren't visible to the
-		current user or that have status:deleted
+	- navigating on danbooru does't skip restricted posts
 		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
@@ -182,17 +180,17 @@ known issues:
 
 planned enhancements:
 
+	- smarter prefetching
 	- more hotkeys
 	- help/about page
 		- reload button
 	- property sheet
 	- navigation on current page without API requests
-	- spinner on the thumbnail overlay
 	- post pages: add a link back to the gallery page on which it appears (?)
 	- options page
-	- settings for showing fullsize/thumbnail/sample
-		loading full-size images may not always be desirable
-		(e.g. mobile browsing with small data allowance)
+		- settings for showing fullsize/thumbnail/sample
+			loading full-size images may not always be desirable
+			(e.g. mobile browsing with small data allowance)
 
 test cases:
 
@@ -611,6 +609,28 @@ const userscriptEntrypoint = function(doc) {
 			`(domain: ${d.name}, kind: ${d.kind}, subkind: ${d.subkind})`);
 	};
 
+	onReadyStateChange({currentTarget : doc});
+};
+
+const onReadyStateChange = function f(ev) {
+	/* userscripts aren't reliably executed at the correct readyState … */
+
+	let doc = ev.currentTarget;
+	doc.removeEventListener(`readystatechange`, f, false);
+
+	if ([`interactive`, `complete`].includes(doc.readyState)) {
+		log(`document loaded (readyState: ${doc.readyState})`);
+		onDocumentReady(doc);
+	} else {
+		log(`document not loaded (readyState: ${doc.readyState})`);
+		doc.addEventListener(`readystatechange`, f, false);};
+};
+
+let userscriptInitialised = false;
+const onDocumentReady = function(doc) {
+	if (userscriptInitialised) {return;};
+	userscriptInitialised = true;
+
 	enforce([`interactive`, `complete`].includes(doc.readyState),
 		`document not loaded`);
 
@@ -757,7 +777,7 @@ const ensureInlineView = function(state, doc, parentElem) {
 			<a title='Previous' class='${galk.nav} ${galk.prev}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Toggle Size' class='${galk.scale}'>
+			<a title='Toggle Size' class='${galk.scale} ${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
 			<a title='Next' class='${galk.nav} ${galk.next}'>
@@ -775,6 +795,12 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 				<aside class='${galk.notesOverlay}'></aside>
 
+				<object class='${galk.media}' hidden=''
+					type='application/x-shockwave-flash'
+					typemustmatch='' width='0' height='0'>
+					<param name='wmode' value='transparent'/>
+				</object>
+
 				<nav class='${galk.ctrlOverlay}'>
 					<a class='${galk.nav} ${galk.prev}'>
 						<figure class='${galk.btnIcon}'></figure></a>
@@ -788,13 +814,7 @@ const ensureInlineView = function(state, doc, parentElem) {
 				<img class='${galk.media}' hidden=''/>
 
 				<video class='${galk.media}' hidden=''
-					controls='' loop=''></video>
-
-				<object class='${galk.media}'
-					type='application/x-shockwave-flash'
-					typemustmatch='' hidden=''>
-					<param name='movie'/>
-				</object>
+					controls='' loop='' muted='' preload='metadata'></video>
 
 				<img class='${galk.mediaSample}' hidden=''/>
 
@@ -802,7 +822,8 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 				<img class='${galk.mediaPlaceholder}'/>
 
-				<figure class='${galk.mediaUnavailable}' hidden=''></figure>
+				<figure class='${galk.mediaUnavailable}' hidden=''>
+					<img/></figure>
 			</section>
 		</section>
 
@@ -831,7 +852,7 @@ const ensureInlineView = function(state, doc, parentElem) {
 };
 
 const bindInlineView = async function(state, doc, view) {
-	dbg && assert(view instanceof HTMLElement);
+	enforce(view instanceof HTMLElement, `invalid parameter "view"`);
 
 	log(`binding inline-view panel …`);
 
@@ -855,22 +876,27 @@ const bindInlineView = async function(state, doc, view) {
 	/* async operations should check `!revoked()` before accessing any
 	inline view elements */
 
+	doc.documentElement.classList.remove(galk.ivLayoutState+`-ready`);
+	doc.documentElement.classList.remove(galk.ivLayoutState+`-pending`);
+
 	let notesOvr = enforce(getSingleElemByClass(view, galk.notesOverlay));
 	view.classList.remove(galk.notesVisible);
-	clearNotesOverlay(notesOvr);
+	removeChildren(notesOvr);
 
+	let stackElem = enforce(getSingleElemByClass(view, galk.ivContentStack));
 	let imgElem = enforce(querySingleElem(view, `img.${galk.media}`));
 	let vidElem = enforce(querySingleElem(view, `video.${galk.media}`));
 	let swfElem = enforce(querySingleElem(view, `object.${galk.media}`));
 	let sampleElem = enforce(getSingleElemByClass(view, galk.mediaSample));
 	let thumbElem = enforce(getSingleElemByClass(view, galk.mediaThumbnail));
-	let phldrElem = enforce(getSingleElemByClass(view, galk.mediaPlaceholder));
 	let unavElem = enforce(getSingleElemByClass(view, galk.mediaUnavailable));
+	let scaleBtn = enforce(querySingleElem(view, `.${galk.scale}`));
+	let phldrElem = enforce(getSingleElemByClass(view, galk.mediaPlaceholder));
 
 	let unbindContent = function() {
 		for (let el of [
-			imgElem, vidElem, swfElem, phldrElem,
-			sampleElem, thumbElem, unavElem,])
+			imgElem, vidElem, phldrElem, sampleElem,
+			thumbElem, unavElem, swfElem])
 		{
 			el.hidden = true;
 			el.removeAttribute(`src`);
@@ -893,8 +919,12 @@ const bindInlineView = async function(state, doc, view) {
 		return;
 	};
 
+	doc.documentElement.classList.add(galk.ivLayoutState+`-pending`);
+
 	let infoPromise = tryGetPostInfo(state, state.currentPostId);
 	let notesPromise = tryGetPostNotes(state, state.currentPostId);
+
+	let currentHref = doc.location.href;
 
 	if (await Promise.race([infoPromise, Promise.resolve(null)]) === null) {
 		if (revoked()) {
@@ -904,10 +934,25 @@ const bindInlineView = async function(state, doc, view) {
 		unbindContent();
 	};
 
+	for (let c of [...stackElem.classList]) {
+		if (c.startsWith(galk.scaleMode)
+			|| c.startsWith(galk.mediaType))
+		{
+			stackElem.classList.remove(c);};
+	};
+
+	scaleBtn.classList.add(galk.disabled);
+
+	let invScaleMode = state.scaleMode === `fit` ? `full` : `fit`;
+	let invScaleModeFrag = stateAsFragment(
+		{...state, scaleMode : invScaleMode}, currentHref);
+
 	infoPromise.then((info) => {
-		log(`info retrieved for post #${state.currentPostId}`);
 		if (revoked()) {
 			return;};
+
+		doc.documentElement.classList.remove(galk.ivLayoutState+`-pending`);
+		doc.documentElement.classList.add(galk.ivLayoutState+`-ready`);
 
 		dbg && assert(typeof info === `object`);
 
@@ -918,9 +963,9 @@ const bindInlineView = async function(state, doc, view) {
 				+` (id:${state.currentPostId})`);
 			unbindContent();
 
-			unavElem.style.backgroundImage =
-				`url("${svgDataHref(
-					svgMediaUnavailable(state.currentPostId))}")`;
+			/* use `srcset` as a workaround for easylist rules: */
+			unavElem.firstElementChild.srcset =
+				svgDataHref(svgMediaUnavailable(state.currentPostId));
 			unavElem.hidden = false;
 
 			maybeScrollIntoView(
@@ -929,35 +974,77 @@ const bindInlineView = async function(state, doc, view) {
 			return;
 		};
 
+		log(`info retrieved for post #${state.currentPostId};`,
+			`media type: ${info.type}`);
+		stackElem.classList.add(galk.mediaType+`-${info.type}`);
+
 		unavElem.hidden = true;
+		unavElem.firstElementChild.removeAttribute(`srcset`);
+
+		/* scale mode: */
+		stackElem.classList.add(galk.scaleMode+`-${state.scaleMode}`);
+		scaleBtn.classList.remove(galk.scaleMode+`-${state.scaleMode}`);
+		scaleBtn.classList.add(galk.scaleMode+`-${invScaleMode}`);
+		scaleBtn.href = invScaleModeFrag;
+		scaleBtn.classList.remove(galk.disabled);
 
 		/* thumbnail image: */
 
 		thumbElem.classList.remove(galk.animateToHidden);
-		if (info.thumbnailHref) {
+		if (info.thumbnailHref
+			&& info.type !== `swf` /* swf doesn't have thumbnails */)
+		{
 			updateMediaAttr(thumbElem, `src`, info.thumbnailHref);
 			thumbElem.hidden = false;
 		} else {
 			thumbElem.hidden = true;
 			thumbElem.removeAttribute(`src`);};
 
+		let placeholderHref =
+			svgDataHref(svgEmptyPlaceholder(info.width, info.height));
+
 		if (info.type === `video`) {
 			imgElem.hidden = true;
 			imgElem.removeAttribute(`src`);
 			sampleElem.hidden = true;
 			sampleElem.removeAttribute(`src`);
+			swfElem.hidden = true;
+			swfElem.removeAttribute(`data`);
 
 			updateMediaAttr(vidElem, `src`, info.mediaHref);
 			vidElem.hidden = false;
 
+			// todo
 			//imgElem.addEventListener(`load`, ev => {
 
-		//} else if (info.type === `swf`) {
-			// todo
-
-		} else {
+		} else if (info.type === `swf`) {
+			imgElem.hidden = true;
+			imgElem.removeAttribute(`src`);
+			sampleElem.hidden = true;
+			sampleElem.removeAttribute(`src`);
 			vidElem.hidden = true;
 			vidElem.removeAttribute(`src`);
+
+			if (swfElem.getAttribute(`data`) !== info.mediaHref) {
+				swfElem.hidden = true;
+				/* force the <object> to load by re-creating it: */
+				let newEl = swfElem.cloneNode(true);
+				newEl.data = info.mediaHref;
+				swfElem.replaceWith(newEl);
+				swfElem = newEl;
+			};
+			swfElem.hidden = false;
+
+			/* <object> loading behaviour/events are not well defined or
+			consistent between browsers → just assume it's loaded immediately */
+
+			dispatchMediaViewingEvent(state, view, info.postId);
+
+		} else if (info.type === `image`) {
+			vidElem.hidden = true;
+			vidElem.removeAttribute(`src`);
+			swfElem.hidden = true;
+			swfElem.removeAttribute(`data`);
 
 			if (false) {//info.sampleHref) {
 				// disabled for now as it interferes with the alpha-channel
@@ -1006,13 +1093,14 @@ const bindInlineView = async function(state, doc, view) {
 			};
 
 			imgElem.hidden = false;
+		} else {
+			logWarn(`unrecognised media type "${info.type}"`);
 		};
 
 		/* placeholder image: */
 
 		/* use `srcset` as a workaround for easylist element hiding rules: */
-		updateMediaAttr(phldrElem, `srcset`,
-			svgDataHref(svgEmptyPlaceholder(info.width, info.height)));
+		updateMediaAttr(phldrElem, `srcset`, placeholderHref);
 
 		{/* scroll to the placeholder when it loads: */
 			let onLoaded = function() {
@@ -1069,22 +1157,6 @@ const bindInlineView = async function(state, doc, view) {
 
 		notesBtn.classList.remove(galk.disabled);
 	});
-
-	enforce(getSingleElemByClass(view, galk.ivContentStack))
-		.classList.toggle(galk.scaleFit, state.scaleMode === `fit`);
-
-	let currentHref = doc.location.href;
-
-	/* scale-mode button: */
-
-	let invScaleMode = state.scaleMode === `fit` ? `full` : `fit`;
-	let invScaleModeFrag = stateAsFragment(
-		{...state, scaleMode : invScaleMode}, currentHref);
-
-	let scaleBtn = querySingleElem(view, `.${galk.scale}`);
-	scaleBtn.classList.remove(galk[state.scaleMode]);
-	scaleBtn.classList.add(galk[invScaleMode]);
-	scaleBtn.href = invScaleModeFrag;
 
 	/* click image to toggle scale-mode: */
 	imgElem.addEventListener(`click`, function f(ev) {
@@ -1147,9 +1219,10 @@ const dispatchMediaViewingEvent = function(state, view, postId) {
 		galk.mediaViewing, {detail : {state, postId}}));
 };
 
-const clearNotesOverlay = function(ovr) {
-	while (ovr.hasChildNodes()) {
-		ovr.removeChild(ovr.firstChild);};
+const removeChildren = function(el) {
+	dbg && assert(el instanceof Element);
+	while (el.hasChildNodes()) {
+		el.removeChild(el.firstChild);};
 };
 
 const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
@@ -1159,7 +1232,7 @@ const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
 
 	log(`binding notes overlay (${notes.length} notes) …`);
 
-	clearNotesOverlay(ovr);
+	removeChildren(ovr);
 
 	let {width, height} = postInfo;
 	if (!isInt(width) || !(width > 0)
@@ -1303,10 +1376,17 @@ const ensureThumbnailOverlay = function(state, doc, thumb, info) {
 
 	ovr.appendChild(
 		Object.assign(doc.createElement(`a`),
-			{title, className : galk.postPage, href : info.url.href}));
+			{title, className : galk.postPage, href : info.url.href}))
+		.appendChild(
+			Object.assign(doc.createElement(`figure`),
+				{className : galk.btnIcon}));
+
 	ovr.appendChild(
 		Object.assign(doc.createElement(`a`),
-			{title, className : galk.open,}));
+			{title, className : galk.open,}))
+		.appendChild(
+			Object.assign(doc.createElement(`figure`),
+				{className : galk.btnIcon}));
 
 	thumb.prepend(ovr);
 
@@ -1539,16 +1619,6 @@ const searchExprAllTerms = function(domain, expr) {
 
 	return terms;
 };
-
-//test(_ => {
-//	let state = {origin : `https://testbooru.donmai.us.net`};
-	// todo
-//});
-
-//test(_ => {
-//	let state = {origin : `https://gelbooru.com`};
-	// todo
-//});
 
 const getThumbClass = function({name}) {
 	dbg && assert(typeof name === `string`);
@@ -2067,7 +2137,7 @@ const getMediaType = function(href) {
 		if (p.endsWith(`.webm`) || p.endsWith(`.mp4`)) {
 			type = `video`;
 		} else if (p.endsWith(`.swf`)) {
-			type = `flash`;
+			type = `swf`;
 		};
 	};
 
@@ -2144,10 +2214,6 @@ const stateAsFragment = function(state, baseHref) {
 
 	return fragmentPrefix+encodeURIComponent(JSON.stringify(fragState));
 };
-
-test(_ => {
-	// todo
-});
 
 const getDomain = function({origin}) {
 	dbg && assert(typeof origin === `string`);
@@ -2349,10 +2415,6 @@ const postIdFromUrl = function({origin}, url) {
 	return -1;
 };
 
-test(_ => {
-	// todo
-});
-
 const requestPostInfoUrl = function(state, postId) {
 	dbg && assert(isPostId(postId));
 
@@ -2502,36 +2564,6 @@ const requestNavigatePostInfoUrl = function(
 			dbg && assert(false);
 	};
 };
-
-//test(_ => {
-//	let url = requestNavigatePostInfoUrl(
-//		{origin : `https://rule34.xxx`},
-//		265, `next`, `absurdres`);
-//
-//	assert(url.origin === `https://rule34.xxx`);
-//	assert(url.pathname === `/`);
-//	assert(url.searchParams.get(`page`) === `dapi`);
-//	assert(url.searchParams.get(`s`) === `post`);
-//	assert(url.searchParams.get(`q`) === `index`);
-//	assert(url.searchParams.get(`limit`) === `1`);
-//	assert(url.searchParams.get(`tags`) === `id:>265 sort:id:asc absurdres`);
-//
-//	// todo
-//});
-//
-//test(_ => {
-//	let url = requestNavigatePostInfoUrl(
-//		{origin : `https://testbooru.donmai.us`},
-//		265, `next`, `absurdres`);
-//
-//	assert(url.origin === `https://testbooru.donmai.us`);
-//	assert(url.pathname === `/post/index.json`);
-//	assert(url.searchParams.get(`limit`) === `1`);
-//	assert(url.searchParams.get(`page`) === `a265`);
-//	assert(url.searchParams.get(`tags`) === `absurdres`);
-//
-//	// todo
-//});
 
 const postPageUrl = function(state, postId) {
 	dbg && assert(isPostId(postId));
@@ -2983,7 +3015,9 @@ const getGlobalStyleRules = function(domain) {
 			--${galk.cNoteCaption} : hsla(0, 0%, 10%, 1);
 			--${galk.cNoteCaptionBg} : hsla(60, 100%, 96.7%, 0.95);
 			--${galk.dIvWidth} : 185mm;
+			--${galk.dIvContentMinHeight} : 74mm;
 			--${galk.dIvBarHeight} : 11mm;
+			--${galk.dThumbOvrBtnSize} : 15mm;
 		}`,
 
 		`:root.${galk.theme}-dark {
@@ -3001,7 +3035,7 @@ const getGlobalStyleRules = function(domain) {
 			flex-direction : column;
 			align-items : center;
 			justify-content : flex-start;
-			min-height : calc(74mm + 50vh);
+			min-height : calc(var(--${galk.dIvContentMinHeight}) + 50vh);
 		}`,
 
 		`.${galk.ivPanel}[hidden] {
@@ -3023,7 +3057,7 @@ const getGlobalStyleRules = function(domain) {
 			display : flex;
 			align-items : center;
 			max-width : 100%; /* make extra-wide images overflow to the right */
-			min-height : 37mm;
+			min-height : var(--${galk.dIvContentMinHeight});
 		}`,
 
 		`.${galk.ivContentStack} {
@@ -3041,17 +3075,22 @@ const getGlobalStyleRules = function(domain) {
 			display : none; /* necessary due to 'reset' stylesheets */
 		}`,
 
-		`.${galk.ivContentStack}.${galk.scaleFit} {
+		`.${galk.ivContentStack}.${galk.scaleMode}-fit {
 			max-width : 100vw;
 		}`,
 
-		`.${galk.ivContentStack}.${galk.scaleFit} > * {
+		`.${galk.ivContentStack}.${galk.scaleMode}-fit > * {
 			max-width : 100%;
 			max-height : 100vh;
 		}`,
 
 		`.${galk.ivContentStack} > .${galk.media} {
 			z-index : 2;
+		}`,
+
+		`.${galk.ivContentStack} > object.${galk.media} {
+			/* interactive swf objects must be above ctrl-overlay: */
+			z-index : 4;
 		}`,
 
 		`.${galk.ivContentStack} > .${galk.mediaSample} {
@@ -3071,26 +3110,33 @@ const getGlobalStyleRules = function(domain) {
 			height : 100%;
 		}`,
 
-		`.${galk.ivContentStack} > .${galk.mediaUnavailable} {
-			margin : 0;
+		`object.${galk.media} {
+			width : 100%;
+			height : 100%;
+		}`,
+
+		`.${galk.mediaUnavailable} {
+			display : flex;
+			justify-content : center;
+			align-items : center;
 			width : var(--${galk.dIvWidth});
-			height : 74mm;
+			min-height : 50vh;
 			background-color : var(--${galk.cIvBg});
-			background-size : 70%;
-			background-repeat : no-repeat;
-			background-position : center;
 			opacity : 0.75;
+		}`,
+
+		`.${galk.mediaUnavailable} > img {
+			width : calc(var(--${galk.dIvWidth}) * 0.8);
 		}`,
 
 		`.${galk.ivContentStack} > .${galk.ctrlOverlay} {
 			z-index : 3;
-			min-width : var(--${galk.dIvWidth});
 			width : 100%;
 			height : 100%;
 		}`,
 
 		`.${galk.ivContentStack} > .${galk.notesOverlay} {
-			z-index : 4;
+			z-index : 5;
 			width : 100%;
 			height : 100%;
 		}`,
@@ -3104,7 +3150,6 @@ const getGlobalStyleRules = function(domain) {
 		`.${galk.notesOverlay} > figure {
 			position : absolute;
 			visibility : visible;
-			margin : 0;
 			z-index : 0;
 			background : var(--${galk.cNoteBg});
 		}`,
@@ -3168,8 +3213,7 @@ const getGlobalStyleRules = function(domain) {
 			opacity : 1;
 		}`,
 
-		`.${galk.ivCtrlBar} > * > .${galk.btnIcon} {
-			margin : 0;
+		`.${galk.ivCtrlBar} .${galk.btnIcon} {
 			width : calc(var(--${galk.dIvBarHeight}) * 0.7);
 			height : calc(var(--${galk.dIvBarHeight}) * 0.7);
 			background-size : contain;
@@ -3178,13 +3222,18 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgHref(svgCircleRing)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.scale}.${galk.full}
+		`.${galk.ivCtrlBar} > .${galk.disabled} > .${galk.btnIcon} {
+			opacity : 0.4;
+			background-image : url(${svgHref(svgCircleRing)}) !important;
+		}`,
+
+		`.${galk.ivCtrlBar} > .${galk.scale}.${galk.scaleMode}-full
 			> .${galk.btnIcon}
 		{
 			background-image : url(${svgHref(svgCircleExpand)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.scale}.${galk.fit}
+		`.${galk.ivCtrlBar} > .${galk.scale}.${galk.scaleMode}-fit
 			> .${galk.btnIcon}
 		{
 			background-image : url(${svgHref(svgCircleContract)});
@@ -3210,9 +3259,7 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgHref(svgCircleQuestion)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.notes}:not(.${galk.disabled})
-			> .${galk.btnIcon}
-		{
+		`.${galk.ivCtrlBar} > .${galk.notes} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleNote)});
 		}`,
 
@@ -3242,7 +3289,8 @@ const getGlobalStyleRules = function(domain) {
 			visibility : hidden;
 		}`,
 
-		`:not(.${galk.scaleFit}) > .${galk.ctrlOverlay} > .${galk.nav} {
+		`.${galk.scaleMode}-full > .${galk.ctrlOverlay} > .${galk.nav} {
+			/* don't show the nav overlay in full-size scale mode: */
 			display : none;
 		}`,
 
@@ -3255,8 +3303,11 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.ctrlOverlay} > .${galk.nav} > .${galk.btnIcon} {
-			width : calc(var(--${galk.dIvWidth}) / 5);
-			height : calc(var(--${galk.dIvWidth}) / 5);
+			width : 60%;
+			height : 100%;
+			background-size : contain;
+			background-repeat : no-repeat;
+			background-position : center;
 		}`,
 
 		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready} {
@@ -3266,6 +3317,22 @@ const getGlobalStyleRules = function(domain) {
 		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:hover {
 			opacity : 0.6;
 		}`,
+
+		/*`.${galk.mediaType}-video > .${galk.ctrlOverlay} > .${galk.nav} {
+			background-color : transparent;
+		}`,
+
+		`.${galk.mediaType}-video > .${galk.ctrlOverlay} {
+			height : 60%;
+		}`,
+
+		`.${galk.mediaType}-video > .${galk.ctrlOverlay} > .${galk.nav}
+			> .${galk.btnIcon}
+		{
+			border-radius : 50%;
+			box-shadow: 0px 0px 0px 4mm var(--${galk.cIvBg});
+			background-color : var(--${galk.cIvBg});
+		}`,*/
 
 		`.${galk.prev}.${galk.ready} > .${galk.btnIcon} {
 			background-image : url(${svgCircleArrowLeftHref});
@@ -3306,31 +3373,58 @@ const getGlobalStyleRules = function(domain) {
 			right : 0;
 		}`,
 
-		`.${galk.thumbOverlay} > * {
+		`.${galk.thumbOverlay} > a {
 			flex-grow : 1;
+			display : flex;
+			align-items : center;
+			justify-content : center;
+			opacity : 0;
 		}`,
 
-		`.${galk.thumbOverlay} > a {
-			background-position : center;
-			background-repeat : no-repeat;
-			background-size : 30%;
+		`.${galk.thumbOverlay} > a > .${galk.btnIcon} {
+			width : var(--${galk.dThumbOvrBtnSize});
+			height : var(--${galk.dThumbOvrBtnSize});
+		}`,
+
+		`.${galk.thumbOverlay} > a:hover,
+		.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open} {
 			opacity : 0.7;
 		}`,
 
-		`.${galk.thumbOverlay} > a.${galk.postPage}:hover {
-			background-image : url(${svgHref(svgCircleLink)});
+		`.${galk.thumbOverlay} > a.${galk.postPage} {
 			background-color : var(--${galk.cExLink});
 		}`,
 
-		`.${galk.thumbOverlay} > a.${galk.open}:hover,
-		.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}
-		{
-			background-image : url(${svgCircleArrowDownHref});
+		`.${galk.thumbOverlay} > a.${galk.postPage} > .${galk.btnIcon} {
+			background-image : url(${svgHref(svgCircleLink)});
+		}`,
+
+		`.${galk.thumbOverlay} > a.${galk.open} {
 			background-color : var(--${galk.cIvAction});
 		}`,
 
-		`.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}:hover {
+		`.${galk.thumbOverlay} > a.${galk.open} > .${galk.btnIcon} {
+			background-image : url(${svgCircleArrowDownHref});
+		}`,
+
+		`.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}
+			> .${galk.btnIcon}
+		{
+			background-image : url(${svgCircleArrowDownHref});
+		}`,
+
+		`.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}:hover
+			> .${galk.btnIcon}
+		{
 			background-image : url(${svgCircleArrowUpHref});
+		}`,
+
+		`:root.${galk.ivLayoutState}-pending
+			.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}
+			> .${galk.btnIcon}
+		{
+			background-image : url(${svgHref(svgCircleSpinner)});
+			${spinnerStyleRules}
 		}`,
 
 		`:root.${galk.domainSubkind}-moebooru .${thumbClass} {
@@ -3384,6 +3478,11 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.ivPanel} > header, .${galk.ivPanel} > footer {
 			/* override <header> style set by danbooru: */
+			margin : 0;
+		}`,
+
+		`.${galk.ivPanel} figure {
+			/* override default browser style: */
 			margin : 0;
 		}`,
 	];
