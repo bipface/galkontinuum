@@ -84,6 +84,9 @@ load due to the search database being out of sync with the main database.
 (ascending or descending). Note that on Moebooru-based sites, the default
 order is by timestamp, not by ID.
 
+- Overlay controls are disabled for SWFs, as they could obstruct pointer
+interaction.
+
 - On Danbooru-based sites, [restricted posts][danbooru wiki censored tags]
 might not be excluded when navigating through results, despite being hidden in
 the thumbnail list on the page. These will most likely fail to load.
