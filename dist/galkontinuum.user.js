@@ -314,7 +314,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.04",
-	"version_name": "2019.05.04 (8f3316f74b293fbbd641e1477a5b4f1b0dbf940b)",
+	"version_name": "2019.05.04 (041b121f371239afe7e521e65e6a2ff6aea3f4e9)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -708,6 +708,14 @@ const onKeyDownGlobal = function(ev) {
 
 	let doc = ev.target.ownerDocument;
 
+	//if (ev.key === `Escape`) {
+		// todo
+	//	return;
+	//};
+
+	if (doc.documentElement.classList.contains(galk.mediaFocused)) {
+		return;};
+
 	if (ev.key === `ArrowRight` || ev.key === `Right`) {
 		let btn = doc.querySelector(`.${galk.ivCtrlBar} > .${galk.next}`);
 		if (btn instanceof HTMLElement) {
@@ -818,6 +826,9 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 			<a title='Close' class='${galk.close}'>
 				<figure class='${galk.btnIcon}'></figure></a>
+
+			<a title='Defocus' class='${galk.defocus}' hidden=''>
+				<figure class='${galk.btnIcon}'></figure></a>
 		</header>
 
 		<section class='${galk.ivContentPanel}'>
@@ -828,17 +839,12 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 				<aside class='${galk.notesOverlay}'></aside>
 
-				<object class='${galk.media}' hidden=''
-					type='application/x-shockwave-flash'
-					typemustmatch='' width='0' height='0'>
-					<param name='wmode' value='transparent'/>
-				</object>
-
 				<nav class='${galk.ctrlOverlay}'>
-					<a class='${galk.nav} ${galk.prev}'>
+					<a class='${galk.nav} ${galk.focus}'>
 						<figure class='${galk.btnIcon}'></figure></a>
 
-					<span></span>
+					<a class='${galk.nav} ${galk.prev}'>
+						<figure class='${galk.btnIcon}'></figure></a>
 
 					<a class='${galk.nav} ${galk.next}'>
 						<figure class='${galk.btnIcon}'></figure></a>
@@ -848,6 +854,12 @@ const ensureInlineView = function(state, doc, parentElem) {
 
 				<video class='${galk.media}' hidden=''
 					controls='' loop='' muted='' preload='metadata'></video>
+
+				<object class='${galk.media}' hidden=''
+					type='application/x-shockwave-flash'
+					typemustmatch='' width='0' height='0'>
+					<param name='wmode' value='transparent'/>
+				</object>
 
 				<img class='${galk.mediaSample}' hidden=''/>
 
@@ -1215,6 +1227,16 @@ const bindInlineView = async function(state, doc, view) {
 		ev.currentTarget.removeEventListener(ev.type, f, false);
 		if (!revoked()) {
 			onCloseInlineView(state, doc);};
+	}, false);
+
+	/* focus button: */
+	let focusBtn = enforce(querySingleElem(view,
+		`.${galk.ctrlOverlay} > .${galk.focus}`));
+	focusBtn.addEventListener(`click`, function f(ev) {
+		ev.currentTarget.removeEventListener(ev.type, f, false);
+		if (!revoked()) {
+			// todo
+			/*doc.documentElement.classList.add(galk.mediaFocused);*/};
 	}, false);
 
 	/* prev and next buttons: */
@@ -3071,8 +3093,8 @@ const getGlobalStyleRules = function(domain) {
 			min-height : calc(var(--${galk.dIvContentMinHeight}) + 50vh);
 		}`,
 
-		`.${galk.ivPanel}[hidden] {
-			display : none;
+		`.${galk.ivPanel}[hidden], .${galk.ivPanel} [hidden] {
+			display : none; /* necessary due to 'reset' stylesheets */
 		}`,
 
 		`.${galk.ivCtrlBar} {
@@ -3097,15 +3119,12 @@ const getGlobalStyleRules = function(domain) {
 			display : grid;
 			justify-items : center;
 			align-items : center;
+			position : relative;
 		}`,
 
 		`.${galk.ivContentStack} > * {
 			grid-column : 1;
 			grid-row : 1;
-		}`,
-
-		`.${galk.ivContentStack} > [hidden] {
-			display : none; /* necessary due to 'reset' stylesheets */
 		}`,
 
 		`.${galk.ivContentStack}.${galk.scaleMode}-fit {
@@ -3119,11 +3138,6 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.ivContentStack} > .${galk.media} {
 			z-index : 2;
-		}`,
-
-		`.${galk.ivContentStack} > object.${galk.media} {
-			/* interactive swf objects must be above ctrl-overlay: */
-			z-index : 4;
 		}`,
 
 		`.${galk.ivContentStack} > .${galk.mediaSample} {
@@ -3164,12 +3178,14 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.ivContentStack} > .${galk.ctrlOverlay} {
 			z-index : 3;
-			width : 100%;
+			min-width : 100%;
+			max-width : 100vw;
+			width : var(--galkontinuum-dIvWidth);
 			height : 100%;
 		}`,
 
 		`.${galk.ivContentStack} > .${galk.notesOverlay} {
-			z-index : 5;
+			z-index : 4;
 			width : 100%;
 			height : 100%;
 		}`,
@@ -3317,7 +3333,7 @@ const getGlobalStyleRules = function(domain) {
 		`.${galk.ctrlOverlay} {
 			display : grid;
 			grid-auto-flow : column;
-			grid-auto-columns : 1fr;
+			grid-auto-columns : calc(100% / 3);
 			/* don't obstruct interaction with underlying elements: */
 			visibility : hidden;
 		}`,
@@ -3328,6 +3344,7 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.ctrlOverlay} > .${galk.nav} {
+			grid-row : 1;
 			display : flex;
 			justify-content : center;
 			align-items : center;
@@ -3335,37 +3352,56 @@ const getGlobalStyleRules = function(domain) {
 			opacity : 0;
 		}`,
 
+		`.${galk.ctrlOverlay} > .${galk.prev} {
+			grid-column : 1;
+		}`,
+
+		`.${galk.ctrlOverlay} > .${galk.next} {
+			grid-column : 3;
+		}`,
+
+		`.${galk.ctrlOverlay} > .${galk.focus} {
+			grid-column-start : 1;
+			grid-column-end : 4;
+			opacity : 1;
+			background-color : rgba(0, 0, 0, 0.6);
+			cursor : pointer;
+		}`,
+
+		`.${galk.mediaType}-video > .${galk.ctrlOverlay} > .${galk.focus},
+		.${galk.mediaType}-swf > .${galk.ctrlOverlay} > .${galk.focus}
+		{
+			/* 'focus' button only shown for video/swf: */
+			visibility : visible;
+		}`,
+
 		`.${galk.ctrlOverlay} > .${galk.nav} > .${galk.btnIcon} {
-			width : 60%;
+			width : calc(var(--${galk.dIvWidth}) / 5);
+			max-width : 60%;
 			height : 100%;
 			background-size : contain;
 			background-repeat : no-repeat;
 			background-position : center;
 		}`,
 
+		`.${galk.ctrlOverlay} > .${galk.focus} > .${galk.btnIcon} {
+			max-width : 20%;
+			opacity : 0.2;
+		}`,
+
 		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready} {
 			visibility : visible;
 		}`,
 
-		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:hover {
-			opacity : 0.6;
-		}`,
-
-		/*`.${galk.mediaType}-video > .${galk.ctrlOverlay} > .${galk.nav} {
-			background-color : transparent;
-		}`,
-
-		`.${galk.mediaType}-video > .${galk.ctrlOverlay} {
-			height : 60%;
-		}`,
-
-		`.${galk.mediaType}-video > .${galk.ctrlOverlay} > .${galk.nav}
-			> .${galk.btnIcon}
+		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:hover,
+		.${galk.ctrlOverlay} > .${galk.focus}:hover > .${galk.btnIcon}
 		{
-			border-radius : 50%;
-			box-shadow: 0px 0px 0px 4mm var(--${galk.cIvBg});
-			background-color : var(--${galk.cIvBg});
-		}`,*/
+			opacity : var(--${galk.rIvInactOpacity});
+		}`,
+
+		`.${galk.focus} > .${galk.btnIcon} {
+			background-image : url(${svgHref(svgCircleFocus)});
+		}`,
 
 		`.${galk.prev}.${galk.ready} > .${galk.btnIcon} {
 			background-image : url(${svgCircleArrowLeftHref});
@@ -3798,6 +3834,18 @@ const svgCircleQuestion =
 			0 0 1 1.63 4.02c0 1.76-.57 3.15-1.7 4.16a5.76 5.76 0 0 1-3.94
 			1.52c-1.54 0-2.9-.5-4.06-1.48a5.34 5.34 0 0 1-1.7-4.2 5.63 5.63 0 0
 			1 5.76-5.64z'/>
+	</svg>`;
+
+const svgCircleFocus =
+	`<svg xmlns='http://www.w3.org/2000/svg' width='72' height='72'>
+		<path fill='#fff' d='M36 0A36 36 0 0 0 0 36a36 36 0 0 0 36 36 36 36 0 0
+			0 36-36A36 36 0 0 0 36 0zM23 15h6v4h-6c-2.25 0-4 1.75-4
+			4v6h-4v-6c0-4.4 3.6-8 8-8zm20 0h6c4.4 0 8 3.6 8
+			8v6h-4v-6c0-2.25-1.75-4-4-4h-6v-4zm-7 10c6.05 0 11 4.95 11 11s-4.95
+			11-11 11-11-4.95-11-11 4.95-11 11-11zm0 4c-3.89 0-7 3.11-7 7s3.11 7
+			7 7 7-3.11 7-7-3.11-7-7-7zM15 43h4v6c0 2.25 1.75 4 4 4h6v4h-6c-4.4
+			0-8-3.6-8-8v-6zm38 0h4v6c0 4.4-3.6 8-8 8h-6v-4h6c2.25 0 4-1.75
+			4-4v-6z'/>
 	</svg>`;
 
 /* -------------------------------------------------------------------------- */
