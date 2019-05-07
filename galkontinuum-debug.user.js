@@ -635,7 +635,7 @@ const onDocumentReady = function(doc) {
 		`document not loaded`);
 
 	doc.defaultView.addEventListener(
-		`keydown`, onKeyDownGlobal, true);
+		`keydown`, onKeyDownGlobal, false);
 
 	doc.defaultView.addEventListener(
 		`hashchange`, ev => {applyToDocument(doc);}, false);
@@ -671,30 +671,56 @@ const hostnameDomainTbl = {
 };
 
 const onKeyDownGlobal = function(ev) {
-	/* global hotkeys: */
+	/* hotkeys: */
 
-	let doc = ev.target.ownerDocument;
-
-	//if (ev.key === `Escape`) {
-		// todo
-	//	return;
-	//};
-
-	if (doc.documentElement.classList.contains(galk.mediaFocused)) {
+	if (!(ev.target instanceof Element)) {
 		return;};
 
-	if (ev.key === `ArrowRight` || ev.key === `Right`) {
-		let btn = doc.querySelector(`.${galk.ivCtrlBar} > .${galk.next}`);
-		if (btn instanceof HTMLElement) {
-			btn.click();
+	let doc = ev.target.ownerDocument;
+	if (!doc) {
+		return;};
+
+	let view = getInlineView(doc.documentElement);
+	if (view === null) {
+		/* no hotkeys are active unless the view exists */
+
+	} else if (!nodesAreCoaxial(view, ev.target)
+		&& ev.target.closest(`.${galk.thumbOverlay}`) === null)
+	{
+		/* hotkeys are only active in the view's axis or thumbnail overlay */
+
+	} else if (ev.key === `Escape`) {
+		if (trySelectAndClickDisplayedElem(
+			view, `.${galk.ivCtrlBar} > .${galk.close}`)
+			|| trySelectAndClickDisplayedElem(
+				view, `.${galk.ivCtrlBar} > .${galk.defocus}`))
+		{
+			ev.stopPropagation();};
+
+	} else if (mediaIsFocused(doc)) {
+		/* no further hotkeys are active when media is focused */
+
+	} else if (ev.key === `ArrowRight` || ev.key === `Right`) {
+		if (trySelectAndClickDisplayedElem(
+			view, `.${galk.ivCtrlBar} > .${galk.next}`))
+		{
 			ev.stopPropagation();};
 
 	} else if (ev.key === `ArrowLeft` || ev.key === `Left`) {
-		let btn = doc.querySelector(`.${galk.ivCtrlBar} > .${galk.prev}`);
-		if (btn instanceof HTMLElement) {
-			btn.click();
+		if (trySelectAndClickDisplayedElem(
+			view, `.${galk.ivCtrlBar} > .${galk.prev}`))
+		{
 			ev.stopPropagation();};
 	};
+};
+
+const trySelectAndClickDisplayedElem = function(scope, selector) {
+	let el = scope.querySelector(selector);
+	if (el instanceof HTMLElement && el.offsetParent !== null) {
+		el.click();
+		return true;
+	} else {
+		return false;};
 };
 
 const applyToDocument = function(doc) {
@@ -752,19 +778,15 @@ const getInlineViewParent = function(state, doc) {
 		|| getSingleElemByClass(doc, `contain-push`) /* gelbooru */;
 };
 
-const getInlineView = function(state, parentElem) {
-	let ivPanel = null;
-	if (parentElem instanceof HTMLElement) {
-		ivPanel = getSingleElemByClass(parentElem, galk.ivPanel);};
-
+const getInlineView = function(scopeElem) {
+	let ivPanel = getSingleElemByClass(scopeElem, galk.ivPanel);
 	if (!(ivPanel instanceof HTMLElement)) {
 		return null;};
-
 	return ivPanel;
 };
 
 const ensureInlineView = function(state, doc, parentElem) {
-	let view = getInlineView(state, parentElem);
+	let view = getInlineView(parentElem);
 	if (view !== null) {
 		return view;};
 
@@ -794,7 +816,7 @@ const ensureInlineView = function(state, doc, parentElem) {
 			<a title='Close' class='${galk.close}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Defocus' class='${galk.defocus}' hidden=''>
+			<a title='Release Focus' class='${galk.defocus}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 		</header>
 
@@ -807,7 +829,7 @@ const ensureInlineView = function(state, doc, parentElem) {
 				<aside class='${galk.notesOverlay}'></aside>
 
 				<nav class='${galk.ctrlOverlay}'>
-					<a class='${galk.nav} ${galk.focus}'>
+					<a class='${galk.focus}'>
 						<figure class='${galk.btnIcon}'></figure></a>
 
 					<a class='${galk.nav} ${galk.prev}'>
@@ -893,7 +915,7 @@ const bindInlineView = async function(state, doc, view) {
 
 	let notesOvr = enforce(getSingleElemByClass(view, galk.notesOverlay));
 	view.classList.remove(galk.notesVisible);
-	removeChildren(notesOvr);
+	removeAllChildren(notesOvr);
 
 	let stackElem = enforce(getSingleElemByClass(view, galk.ivContentStack));
 	let imgElem = enforce(querySingleElem(view, `img.${galk.media}`));
@@ -1023,7 +1045,10 @@ const bindInlineView = async function(state, doc, view) {
 			swfElem.hidden = true;
 			swfElem.removeAttribute(`data`);
 
-			updateMediaAttr(vidElem, `src`, info.mediaHref);
+			if (updateMediaAttr(vidElem, `src`, info.mediaHref)) {
+				/* release when switching src: */
+				toggleMediaIsFocused(doc, false);};
+
 			vidElem.hidden = false;
 
 			// todo
@@ -1044,6 +1069,9 @@ const bindInlineView = async function(state, doc, view) {
 				newEl.data = info.mediaHref;
 				swfElem.replaceWith(newEl);
 				swfElem = newEl;
+
+				/* release focus when switching src: */
+				toggleMediaIsFocused(doc, false);
 			};
 			swfElem.hidden = false;
 
@@ -1057,6 +1085,9 @@ const bindInlineView = async function(state, doc, view) {
 			vidElem.removeAttribute(`src`);
 			swfElem.hidden = true;
 			swfElem.removeAttribute(`data`);
+
+			/* images can never be focused: */
+			toggleMediaIsFocused(doc, false);
 
 			if (false) {//info.sampleHref) {
 				// disabled for now as it interferes with the alpha-channel
@@ -1197,14 +1228,12 @@ const bindInlineView = async function(state, doc, view) {
 	}, false);
 
 	/* focus button: */
-	let focusBtn = enforce(querySingleElem(view,
-		`.${galk.ctrlOverlay} > .${galk.focus}`));
-	focusBtn.addEventListener(`click`, function f(ev) {
-		ev.currentTarget.removeEventListener(ev.type, f, false);
-		if (!revoked()) {
-			// todo
-			/*doc.documentElement.classList.add(galk.mediaFocused);*/};
-	}, false);
+	enforce(querySingleElem(view, `.${galk.ctrlOverlay} > .${galk.focus}`))
+		.addEventListener(`click`, onFocusMediaBtnClick, false);
+
+	/* release-focus button: */
+	enforce(querySingleElem(view, `.${galk.ivCtrlBar} > .${galk.defocus}`))
+		.addEventListener(`click`, onDefocusMediaBtnClick, false);
 
 	/* prev and next buttons: */
 	bindNavigationButtons(revoked, state, doc,
@@ -1241,10 +1270,14 @@ const dispatchMediaViewingEvent = function(state, view, postId) {
 		galk.mediaViewing, {detail : {state, postId}}));
 };
 
-const removeChildren = function(el) {
-	dbg && assert(el instanceof Element);
-	while (el.hasChildNodes()) {
-		el.removeChild(el.firstChild);};
+const onFocusMediaBtnClick = function(ev) {
+	toggleMediaIsFocused(
+		ev.target.ownerDocument, true);
+};
+
+const onDefocusMediaBtnClick = function(ev) {
+	toggleMediaIsFocused(
+		ev.target.ownerDocument, false);
 };
 
 const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
@@ -1254,7 +1287,7 @@ const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
 
 	log(`binding notes overlay (${notes.length} notes) …`);
 
-	removeChildren(ovr);
+	removeAllChildren(ovr);
 
 	let {width, height} = postInfo;
 	if (!isInt(width) || !(width > 0)
@@ -1467,8 +1500,12 @@ const thumbnailTitle = function(state, elem) {
 	return xs.title.trim();
 };
 
-const isPostId = function(id) {
-	return isInt(id) && id >= 0;
+const toggleMediaIsFocused = function(doc, x) {
+	doc.documentElement.classList.toggle(galk.mediaIsFocused, x);
+};
+
+const mediaIsFocused = function(doc) {
+	return doc.documentElement.classList.contains(galk.mediaIsFocused);
 };
 
 const searchExprEquiv = function(a, b) {
@@ -2754,6 +2791,10 @@ test(_ => {
 	assert(sequiv(tryParsePath(`/post/index//`), [`post`, `index`, ``]));
 });
 
+const isPostId = function(id) {
+	return isInt(id) && id >= 0;
+};
+
 const tryParsePostId = function(s) {
 	if (typeof s !== `string`) {
 		return -1;};
@@ -2777,6 +2818,24 @@ const tryParsePostId = function(s) {
 	};
 
 	return n | -invalid;
+};
+
+const removeAllChildren = function(el) {
+	dbg && assert(el instanceof Element);
+	while (el.hasChildNodes()) {
+		el.removeChild(el.firstChild);};
+};
+
+const nodesAreCoaxial = function(a, b) {
+	dbg && assert(a instanceof Node);
+	dbg && assert(b instanceof Node);
+
+	const containFlags =
+		Node.DOCUMENT_POSITION_CONTAINS
+		|Node.DOCUMENT_POSITION_CONTAINED_BY;
+
+	let r = a.compareDocumentPosition(b);
+	return r === 0 || (r & containFlags) !== 0;
 };
 
 const maybeScrollIntoView = function(
@@ -2814,7 +2873,9 @@ const updateMediaAttr = function(el, attr, value) {
 		el.removeAttribute(attr);
 
 		el.setAttribute(attr, value);
+		return true;
 	};
+	return false;
 };
 
 const sequiv = function(xs, ys, pred = Object.is) {
@@ -3271,12 +3332,26 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgCircleArrowUpHref});
 		}`,
 
+		`.${galk.ivCtrlBar} > .${galk.defocus} > .${galk.btnIcon} {
+			background-image : url(${svgHref(svgCircleCtrlOverlay)});
+		}`,
+
 		`.${galk.ivCtrlBar} > .${galk.help} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleQuestion)});
 		}`,
 
 		`.${galk.ivCtrlBar} > .${galk.notes} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleNote)});
+		}`,
+
+		`:root.${galk.mediaIsFocused} .${galk.ivCtrlBar} > .${galk.close} {
+			display : none;
+		}`,
+
+		`:root:not(.${galk.mediaIsFocused}) .${galk.ivCtrlBar}
+			> .${galk.defocus}
+		{
+			display : none;
 		}`,
 
 		`.${galk.ivPanel}:not(.${galk.notesVisible})
@@ -3310,7 +3385,12 @@ const getGlobalStyleRules = function(domain) {
 			display : none;
 		}`,
 
-		`.${galk.ctrlOverlay} > .${galk.nav} {
+		`:root.${galk.mediaIsFocused} .${galk.ctrlOverlay} {
+			/* don't show any overlay when focused: */
+			display : none;
+		}`,
+
+		`.${galk.ctrlOverlay} > * {
 			grid-row : 1;
 			display : flex;
 			justify-content : center;
@@ -3342,7 +3422,7 @@ const getGlobalStyleRules = function(domain) {
 			visibility : visible;
 		}`,
 
-		`.${galk.ctrlOverlay} > .${galk.nav} > .${galk.btnIcon} {
+		`.${galk.ctrlOverlay} > * > .${galk.btnIcon} {
 			width : calc(var(--${galk.dIvWidth}) / 5);
 			max-width : 60%;
 			height : 100%;
@@ -3814,6 +3894,54 @@ const svgCircleFocus =
 			0-8-3.6-8-8v-6zm38 0h4v6c0 4.4-3.6 8-8 8h-6v-4h6c2.25 0 4-1.75
 			4-4v-6z'/>
 	</svg>`;
+
+const svgCircleCtrlOverlay =
+	`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'>
+		<!-- no inner ring -->
+		<path fill='#fff' d='M36 0a36 36 0 1 0 0 72 36 36 0 0 0 0-72zm-9.17
+			10.1v51.8A27.5 27.5 0 0 1 8.5 36a27.5 27.5 0 0 1 18.33-25.9zm18.34
+			0A27.5 27.5 0 0 1 63.5 36a27.5 27.5 0 0 1-18.33 25.9V10.1zM17.67
+			31a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zM36
+			31a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5zm18.33
+			0a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5z'/>
+	</svg>`;
+
+/*const svgCircleCtrlOverlay =
+	`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'>
+		<!-- includes inner ring -->
+		<path fill='#fff' d='M36 0a36 36 0 1 0 0 72 36 36 0 0 0 0-72zm0
+			8.5a27.5 27.5 0 0 1 9.17 1.61 27.5 27.5 0 0 1 .13.05 27.5 27.5 0 0
+			1 2.34.96 27.5 27.5 0 0 1 .34.18 27.5 27.5 0 0 1 2.03 1.08 27.5
+			27.5 0 0 1 .58.37 27.5 27.5 0 0 1 1.67 1.12 27.5 27.5 0 0 1 .77.6
+			27.5 27.5 0 0 1 1.3 1.07 27.5 27.5 0 0 1 1 .98 27.5 27.5 0 0 1
+			.9.91 27.5 27.5 0 0 1 1.07 1.26 27.5 27.5 0 0 1 .66.82 27.5 27.5 0
+			0 1 1.08 1.58 27.5 27.5 0 0 1 .43.65 27.5 27.5 0 0 1 1.04 1.9 27.5
+			27.5 0 0 1 .25.47 27.5 27.5 0 0 1 1 2.35 27.5 27.5 0 0 1
+			.03.08A27.5 27.5 0 0 1 63.5 36a27.5 27.5 0 0 1-2.48 11.32 27.5 27.5
+			0 0 1-.6 1.25 27.5 27.5 0 0 1-1.08 1.88 27.5 27.5 0 0 1-.33.54 27.5
+			27.5 0 0 1-1.15 1.6 27.5 27.5 0 0 1-.5.68 27.5 27.5 0 0 1-1.15 1.3
+			27.5 27.5 0 0 1-.75.8 27.5 27.5 0 0 1-1.09 1.02 27.5 27.5 0 0 1-1
+			.88 27.5 27.5 0 0 1-1 .76 27.5 27.5 0 0 1-1.26.9 27.5 27.5 0 0
+			1-.92.56 27.5 27.5 0 0 1-1.5.86 27.5 27.5 0 0 1-.79.38 27.5 27.5 0
+			0 1-1.78.8 27.5 27.5 0 0 1-.95.37v-.02A27.5 27.5 0 0 1 36 63.5a27.5
+			27.5 0 0 1-18.34-7.06 27.5 27.5 0 0 1-.23-.2 27.5 27.5 0 0
+			1-1.54-1.55 27.5 27.5 0 0 1-.42-.43 27.5 27.5 0 0 1-1.2-1.5 27.5
+			27.5 0 0 1-.54-.67 27.5 27.5 0 0 1-.91-1.4 27.5 27.5 0 0 1-.6-.94
+			27.5 27.5 0 0 1-.64-1.2 27.5 27.5 0 0 1-.64-1.29 27.5 27.5 0 0
+			1-.06-.13A27.5 27.5 0 0 1 8.5 36a27.5 27.5 0 0 1
+			1.73-9.46h-.03a27.5 27.5 0 0 1 .3-.72 27.5 27.5 0 0 1 .71-1.62 27.5
+			27.5 0 0 1 .46-.94 27.5 27.5 0 0 1 .8-1.4 27.5 27.5 0 0 1 .61-1
+			27.5 27.5 0 0 1 .84-1.16 27.5 27.5 0 0 1 .83-1.1 27.5 27.5 0 0 1
+			.82-.93 27.5 27.5 0 0 1 1.07-1.14 27.5 27.5 0 0 1 .78-.73 27.5 27.5
+			0 0 1 1.3-1.15 27.5 27.5 0 0 1 .7-.53A27.5 27.5 0 0 1 20.99 13a27.5
+			27.5 0 0 1 .64-.4 27.5 27.5 0 0 1 1.77-1 27.5 27.5 0 0 1 .53-.27
+			27.5 27.5 0 0 1 2.04-.9 27.5 27.5 0 0 1 .87-.34v.02A27.5 27.5 0 0 1
+			36 8.5zm0 5a22.5 22.5 0 0 0-9.17 1.98v41.03A22.5 22.5 0 0 0 36
+			58.5a22.5 22.5 0 0 0 9.17-1.99V15.48A22.5 22.5 0 0 0 36 13.5zM17.67
+			31a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zM36 31a5
+			5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5zm18.33 0a5 5
+			0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5z'/>
+	</svg>`;*/
 
 /* -------------------------------------------------------------------------- */
 
