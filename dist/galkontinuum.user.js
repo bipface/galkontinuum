@@ -150,6 +150,7 @@ range.
 
 known issues:
 
+	- pressing escape stops gif playback (test normal browsers)
 	- moebooru: -status:deleted doesn't work
 	- note tooltip may appear off-screen
 		(e.g. https://e621.net/post/index?tags=id:1002)
@@ -223,8 +224,8 @@ test cases:
 
 	sites:
 		- rule34 (special-case for thumbnail urls,
-			special-case for getInlineViewParent)
-		- gelbooru (special-case for getInlineViewParent)
+			special-case for getSlideViewParent)
+		- gelbooru (special-case for getSlideViewParent)
 		- yandere (special-case for thumbnail layout)
 		- e621 (special-case for thumbnail layout)
 
@@ -314,7 +315,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.04",
-	"version_name": "2019.05.04 (c20ba3ece33208eebe2cb521b44b252d0e75f30c)",
+	"version_name": "2019.05.04 (89452ac64a2af17c7a0aca881c16bfc13a20dda8)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -703,17 +704,22 @@ const hostnameDomainTbl = {
 		{kind : `danbooru`, subkind : `moebooru`, name : `yandere`},
 };
 
+const globalBoundKeyNames = new Set([
+	`Escape`, `ArrowRight`, `Right`, `ArrowLeft`, `Left`,]);
+
 const onKeyDownGlobal = function(ev) {
 	/* hotkeys: */
+
+	if (!globalBoundKeyNames.has(ev.key)
+		|| !(ev.target instanceof Element))
+	{
+		return;};
 
 	if (!(ev.target instanceof Element)) {
 		return;};
 
 	let doc = ev.target.ownerDocument;
-	if (!doc) {
-		return;};
-
-	let view = getInlineView(doc.documentElement);
+	let view = getSlideView(doc.documentElement);
 	if (view === null) {
 		/* no hotkeys are active unless the view exists */
 
@@ -724,9 +730,9 @@ const onKeyDownGlobal = function(ev) {
 
 	} else if (ev.key === `Escape`) {
 		if (trySelectAndClickDisplayedElem(
-			view, `.${galk.ivCtrlBar} > .${galk.close}`)
+			view, `.${galk.svCtrlBar} > .${galk.close}`)
 			|| trySelectAndClickDisplayedElem(
-				view, `.${galk.ivCtrlBar} > .${galk.defocus}`))
+				view, `.${galk.svCtrlBar} > .${galk.defocus}`))
 		{
 			ev.stopPropagation();};
 
@@ -735,13 +741,13 @@ const onKeyDownGlobal = function(ev) {
 
 	} else if (ev.key === `ArrowRight` || ev.key === `Right`) {
 		if (trySelectAndClickDisplayedElem(
-			view, `.${galk.ivCtrlBar} > .${galk.next}`))
+			view, `.${galk.svCtrlBar} > .${galk.next}`))
 		{
 			ev.stopPropagation();};
 
 	} else if (ev.key === `ArrowLeft` || ev.key === `Left`) {
 		if (trySelectAndClickDisplayedElem(
-			view, `.${galk.ivCtrlBar} > .${galk.prev}`))
+			view, `.${galk.svCtrlBar} > .${galk.prev}`))
 		{
 			ev.stopPropagation();};
 	};
@@ -773,13 +779,13 @@ const applyToDocument = function(doc) {
 	ensureApplyGlobalStyleRules(state, doc,
 		() => getGlobalStyleRules(getDomain(state)));
 
-	let viewParent = getInlineViewParent(state, doc);
-	let view = ensureInlineView(state, doc, viewParent);
+	let viewParent = getSlideViewParent(state, doc);
+	let view = ensureSlideView(state, doc, viewParent);
 	if (view !== null) {
 		view.addEventListener(galk.mediaViewing, onMediaViewing, false);
-		bindInlineView(state, doc, view);
+		bindSlideView(state, doc, view);
 	} else {
-		logError(`failed to create inline-view panel`);};
+		logError(`failed to create slide-view panel`);};
 
 	let thumbsElem = getThumbnailsListElem(state, doc);
 	if (thumbsElem !== null) {
@@ -804,36 +810,36 @@ const onMediaViewing = function({detail : {state, postId}}) {
 	history.replaceState(s, ``, loc);
 };
 
-const getInlineViewParent = function(state, doc) {
+const getSlideViewParent = function(state, doc) {
 	return getSingleElemByClass(doc, `content-post`) /* r34xxx */
 		|| getSingleElemByClass(doc, `content`) /* e621 / safebooru */
 		|| doc.getElementById(`content`) /* danbooru */
 		|| getSingleElemByClass(doc, `contain-push`) /* gelbooru */;
 };
 
-const getInlineView = function(scopeElem) {
-	let ivPanel = getSingleElemByClass(scopeElem, galk.ivPanel);
-	if (!(ivPanel instanceof HTMLElement)) {
+const getSlideView = function(scopeElem) {
+	let view = getSingleElemByClass(scopeElem, galk.svPanel);
+	if (!(view instanceof HTMLElement)) {
 		return null;};
-	return ivPanel;
+	return view;
 };
 
-const ensureInlineView = function(state, doc, parentElem) {
-	let view = getInlineView(parentElem);
+const ensureSlideView = function(state, doc, parentElem) {
+	let view = getSlideView(parentElem);
 	if (view !== null) {
 		return view;};
 
 	if (parentElem === null) {
 		return null;};
 
-	log(`creating inline-view panel …`);
+	log(`creating slide-view panel …`);
 
 	view = doc.createElement(`section`);
-	view.classList.add(galk.ivPanel);
+	view.classList.add(galk.svPanel);
 	view.hidden = true;
 
 	view.insertAdjacentHTML(`beforeend`,
-		`<header class='${galk.ivCtrlBar}'>
+		`<header class='${galk.svCtrlBar}'>
 			<a title='Toggle Notes' class='${galk.notes} ${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
@@ -853,8 +859,8 @@ const ensureInlineView = function(state, doc, parentElem) {
 				<figure class='${galk.btnIcon}'></figure></a>
 		</header>
 
-		<section class='${galk.ivContentPanel}'>
-			<section class='${galk.ivContentStack}'>
+		<section class='${galk.svContentPanel}'>
+			<section class='${galk.svContentStack}'>
 				<aside class='${galk.helpOverlay}' hidden=''></aside>
 
 				<aside class='${galk.metaOverlay}' hidden=''></aside>
@@ -894,7 +900,7 @@ const ensureInlineView = function(state, doc, parentElem) {
 			</section>
 		</section>
 
-		<footer class='${galk.ivCtrlBar}'>
+		<footer class='${galk.svCtrlBar}'>
 			<a title='' class='${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
@@ -918,10 +924,10 @@ const ensureInlineView = function(state, doc, parentElem) {
 	return view;
 };
 
-const bindInlineView = async function(state, doc, view) {
+const bindSlideView = async function(state, doc, view) {
 	enforce(view instanceof HTMLElement, `invalid parameter "view"`);
 
-	log(`binding inline-view panel …`);
+	log(`binding slide-view panel …`);
 
 	/* the galk.mediaViewing event will be emitted by the view element when the
 	main media element begins loading image data / video frames / etc.
@@ -936,21 +942,21 @@ const bindInlineView = async function(state, doc, view) {
 		revoked = () => r;
 		view.addEventListener(galk.revoke, function f(ev) {
 			ev.currentTarget.removeEventListener(ev.type, f, false);
-			log(`inline view ${ev.type} event triggered`);
+			log(`slide-view ${ev.type} event triggered`);
 			r = true;
 		}, false);
 	};
 	/* async operations should check `!revoked()` before accessing any
-	inline view elements */
+	slide-view elements */
 
-	doc.documentElement.classList.remove(galk.ivLayoutState+`-ready`);
-	doc.documentElement.classList.remove(galk.ivLayoutState+`-pending`);
+	doc.documentElement.classList.remove(galk.svLayoutState+`-ready`);
+	doc.documentElement.classList.remove(galk.svLayoutState+`-pending`);
 
 	let notesOvr = enforce(getSingleElemByClass(view, galk.notesOverlay));
 	view.classList.remove(galk.notesVisible);
 	removeAllChildren(notesOvr);
 
-	let stackElem = enforce(getSingleElemByClass(view, galk.ivContentStack));
+	let stackElem = enforce(getSingleElemByClass(view, galk.svContentStack));
 	let imgElem = enforce(querySingleElem(view, `img.${galk.media}`));
 	let vidElem = enforce(querySingleElem(view, `video.${galk.media}`));
 	let swfElem = enforce(querySingleElem(view, `object.${galk.media}`));
@@ -975,18 +981,18 @@ const bindInlineView = async function(state, doc, view) {
 	if (isPostId(state.currentPostId)) {
 		view.hidden = false;
 	} else {
-		log(`currentPostId not defined; hiding inline-view panel …`);
+		log(`currentPostId not defined; hiding slide-view panel …`);
 		view.hidden = true;
 		unbindContent();
 
 		/* unbind controls: */
-		for (let btn of view.querySelectorAll(`.${galk.ivCtrlBar} > a`)) {
+		for (let btn of view.querySelectorAll(`.${galk.svCtrlBar} > a`)) {
 			btn.removeAttribute(`href`);};
 
 		return;
 	};
 
-	doc.documentElement.classList.add(galk.ivLayoutState+`-pending`);
+	doc.documentElement.classList.add(galk.svLayoutState+`-pending`);
 
 	let infoPromise = tryGetPostInfo(state, state.currentPostId);
 	let notesPromise = tryGetPostNotes(state, state.currentPostId);
@@ -1018,8 +1024,8 @@ const bindInlineView = async function(state, doc, view) {
 		if (revoked()) {
 			return;};
 
-		doc.documentElement.classList.remove(galk.ivLayoutState+`-pending`);
-		doc.documentElement.classList.add(galk.ivLayoutState+`-ready`);
+		doc.documentElement.classList.remove(galk.svLayoutState+`-pending`);
+		doc.documentElement.classList.add(galk.svLayoutState+`-ready`);
 
 		dbg && assert(typeof info === `object`);
 
@@ -1211,7 +1217,7 @@ const bindInlineView = async function(state, doc, view) {
 			return;};
 
 		let notesBtn = enforce(querySingleElem(view,
-			`.${galk.ivCtrlBar} > .${galk.notes}`));
+			`.${galk.svCtrlBar} > .${galk.notes}`));
 
 		let postInfo = await infoPromise;
 		if (!postInfo || !notes || !notes.length) {
@@ -1243,13 +1249,13 @@ const bindInlineView = async function(state, doc, view) {
 
 	/* post page button: */
 	let postPageBtn = enforce(querySingleElem(view,
-		`.${galk.ivCtrlBar} > .${galk.postPage}`));
+		`.${galk.svCtrlBar} > .${galk.postPage}`));
 	postPageBtn.title = `#${state.currentPostId}`;
 	postPageBtn.href = postPageUrl(state, state.currentPostId).href;
 
 	/* close button: */
 	let closeBtn = enforce(querySingleElem(view,
-		`.${galk.ivCtrlBar} > .${galk.close}`));
+		`.${galk.svCtrlBar} > .${galk.close}`));
 	closeBtn.href = stateAsFragment(
 		{...state, currentPostId : undefined}, currentHref);
 
@@ -1257,7 +1263,7 @@ const bindInlineView = async function(state, doc, view) {
 	closeBtn.addEventListener(`click`, function f(ev) {
 		ev.currentTarget.removeEventListener(ev.type, f, false);
 		if (!revoked()) {
-			onCloseInlineView(state, doc);};
+			onCloseSlideView(state, doc);};
 	}, false);
 
 	/* focus button: */
@@ -1265,7 +1271,7 @@ const bindInlineView = async function(state, doc, view) {
 		.addEventListener(`click`, onFocusMediaBtnClick, false);
 
 	/* release-focus button: */
-	enforce(querySingleElem(view, `.${galk.ivCtrlBar} > .${galk.defocus}`))
+	enforce(querySingleElem(view, `.${galk.svCtrlBar} > .${galk.defocus}`))
 		.addEventListener(`click`, onDefocusMediaBtnClick, false);
 
 	/* prev and next buttons: */
@@ -1275,22 +1281,22 @@ const bindInlineView = async function(state, doc, view) {
 		view.querySelectorAll(`a.${galk.next}`), 1);
 };
 
-const destroyInlineView = function(state, view) {
+const destroySlideView = function(state, view) {
 	dbg && assert(view instanceof HTMLElement);
 	view.dispatchEvent(new CustomEvent(galk.revoke));
 	view.remove();
 };
 
-const onReloadInlineView = function(state, doc, view) {
+const onReloadSlideView = function(state, doc, view) {
 	/* clear caches and remove controls: */
 	notesCache.clear();
 	searchResultsCache = null;
-	destroyInlineView(state, view);
+	destroySlideView(state, view);
 
 	doc.defaultView.dispatchEvent(new CustomEvent(galk.reload));
 };
 
-const onCloseInlineView = function(state, doc) {
+const onCloseSlideView = function(state, doc) {
 	maybeScrollIntoView(doc.defaultView,
 		doc.getElementById(`post_${state.currentPostId}`) /* danbooru */
 		|| doc.getElementById(`p${state.currentPostId}`) /* others */,
@@ -1482,7 +1488,7 @@ const ensureThumbnailOverlay = function(state, doc, thumb, info) {
 };
 
 const getThumbnailsListElem = function(state, doc) {
-	let elem = getInlineViewParent(state, doc);
+	let elem = getSlideViewParent(state, doc);
 	if (elem === null) {
 		return null;};
 
@@ -1918,15 +1924,14 @@ const getCachedSearchResult = function(searchExpr, fromId, direction) {
 	dbg && assert(c.results instanceof TypedArray);
 
 	let fromOffset = c.results.indexOf(fromId);
-
-	let rv = fromOffset >= 0
+	let rv = fromOffset > 0
 		? c.results[fromOffset + direction]
-		: undefined;
+		: -1;
 
-	log(`search results cache ${rv !== undefined ? 'hit' : 'miss'};`
+	dbg && logDebug(`search results cache ${isPostId(rv) ? 'hit' : 'miss'};`
 		+` fromId: ${fromId}, direction: ${direction}`);
 
-	return rv;
+	return isPostId(rv) ? rv : -1;
 };
 
 const cacheSearchResults = function(
@@ -1935,13 +1940,13 @@ const cacheSearchResults = function(
 	dbg && assert(isPostId(fromId));
 	dbg && assert(direction === -1 /* prev */ || direction === 1 /* next */);
 
-	dbg && assert(isIterable(idsToCache) && lengthOf(idsToCache) >= 0);
-	if (!idsToCache.length) {
+	dbg && assert(isIterable(idsToCache));
+	if (lengthOf(idsToCache) === 0) {
 		return;};
 
-	log(`before: search results cache contains`
+	dbg && logDebug(`before: search results cache contains`
 		+` ${((searchResultsCache || {}).results || []).length} entries`);
-	log(`adding ${idsToCache.length} postIds to search results cache;`
+	dbg && logDebug(`adding ${lengthOf(idsToCache)} postIds to cache;`
 		+` fromId: ${fromId}, direction: ${direction} …`);
 
 	let c = ensureSearchResultsCache(searchExpr);
@@ -1962,8 +1967,41 @@ const cacheSearchResults = function(
 			idsToCache));
 	};
 
-	log(`after: search results cache contains`
+	dbg && assert(c.results.subarray(1, -1).every(isPostId))
+
+	dbg && logDebug(`after: search results cache contains`
 		+` ${((searchResultsCache || {}).results || []).length} entries`);
+};
+
+const cacheShouldPrefetch = function(searchExpr, fromId, direction, threshold) {
+	dbg && assert(isInt(threshold));
+	dbg && assert(isPostId(fromId));
+	dbg && assert(direction === -1 /* prev */ || direction === 1 /* next */);
+
+	let c = searchResultsCache;
+	if (c === null || !searchExprEquiv(searchExpr, c.searchExpr)) {
+		return true;};
+
+	let fromOffset = c.results.indexOf(fromId);
+	if (fromOffset < 0) {
+		return true;};
+
+	switch (direction) {
+		case -1 :
+			let first = c.results[0];
+			if (isPostId(first) && fromOffset <= threshold) {
+				return first;};
+			break;
+
+		case 1 :
+			let n = c.results.length;
+			let last = c.results[n - 1];
+			if (isPostId(last) && n - fromOffset <= threshold) {
+				return last;};
+			break;
+	};
+
+	return -1;
 };
 
 const tryNavigatePostInfo = async function(
@@ -1986,14 +2024,46 @@ const tryNavigatePostId = async function(
 	{/* check if we have it cached: */
 		let postId = getCachedSearchResult(
 			searchExpr, fromPostId, direction);
-		if (postId !== undefined) {
-			// todo: prefetching
+		if (isPostId(postId)) {
+			maybePrefetchNavigatePostId(
+				state, searchExpr, fromPostId, direction);
 			return postId;
 		};
 	};
 
-	let requUrl = requestNavigatePostInfoUrl(
+	return tryRequestNavigatePostId(
 		state, searchExpr, fromPostId, direction);
+};
+
+const navigatePostInfoPrefetchThreshold = 2; // todo: increase
+
+const maybePrefetchNavigatePostId = function(
+	state, searchExpr, fromPostId, direction)
+{
+	dbg && assert(isPostId(fromPostId));
+
+	let prefetchFromId = cacheShouldPrefetch(
+		searchExpr, fromPostId, direction, navigatePostInfoPrefetchThreshold);
+	if (isPostId(prefetchFromId)) {
+		dbg && logDebug(`prefetch triggered;`,
+			`from: ${prefetchFromId}, direction: ${direction}`);
+		tryRequestNavigatePostId(
+			state, searchExpr, prefetchFromId, direction);
+	};
+};
+
+const navigatePostInfoRequPageLen = 5; // todo: increase
+
+const tryRequestNavigatePostId = async function(
+	state, searchExpr, fromPostId, direction)
+{
+	/* doesn't check cache first */
+
+	dbg && assert(isPostId(fromPostId));
+	dbg && assert(direction === -1 /* prev */ || direction === 1 /* next */);
+
+	let requUrl = requestNavigatePostInfoUrl(
+		state, searchExpr, fromPostId, direction, navigatePostInfoRequPageLen);
 	if (requUrl === null) {
 		return undefined;};
 
@@ -2036,9 +2106,10 @@ const tryNavigatePostId = async function(
 		postInfoTbl.set(info.postId, info);
 	};
 
+	let odr = searchExprIdOrder(state, searchExpr);
+
 	if (ids.length >= 2) {
 		/* check whether the results need to be reversed: */
-		let odr = searchExprIdOrder(state, searchExpr);
 		if ((odr === 1 && ids[0] > ids[ids.length - 1])
 			|| (odr === -1 && ids[0] < ids[ids.length - 1]))
 		{
@@ -2046,13 +2117,22 @@ const tryNavigatePostId = async function(
 		};
 	};
 
-	cacheSearchResults(searchExpr, fromPostId, direction, ids);
+	let resultsToCache = ids;
+	if (ids.length < navigatePostInfoRequPageLen) {
+		/* got less results than we requested, meaning we reached the end;
+		add a sentinel value to prevent prefetching in that direction: */
+		if (direction === 1) {
+			resultsToCache = chain(ids, [-1]);
+		} else if (direction === -1) {
+			resultsToCache = chain([-1], ids);};
+	};
+
+	cacheSearchResults(searchExpr, fromPostId, direction, resultsToCache);
 
 	return (direction === -1
 		? ids[ids.length - 1]
 		: ids[0]);
 };
-
 
 const postInfosFromDanbooruApiPostsList = function(state, posts) {
 	if (!Array.isArray(posts)) {
@@ -2567,14 +2647,13 @@ const requestPostNotesUrl = function(state, postId) {
 	};
 };
 
-const navigatePostInfoRequPageLen = 3; // todo: increase
-
 const requestNavigatePostInfoUrl = function(
-	state, expr, fromPostId, direction)
+	state, expr, fromPostId, direction, n)
 {
 	dbg && assert(isPostId(fromPostId));
 	dbg && assert(typeof expr === `object` && expr !== null);
 	dbg && assert(direction === -1 || direction === 1);
+	dbg && assert(isInt(n) && n > 0);
 
 	let idOrder = searchExprIdOrder(state, expr);
 	if (idOrder === undefined) {
@@ -3070,7 +3149,7 @@ const ensureApplyGlobalStyleRules = function(state, doc, getRules) {
 	root.classList.add(galk.domainKind+`-${domain.kind}`);
 	if (domain.subkind !== undefined) {
 		root.classList.add(galk.domainSubkind+`-${domain.subkind}`);};
-	root.classList.add(galk.theme+`-${getInlineViewTheme(domain, doc)}`);
+	root.classList.add(galk.theme+`-${getSlideViewTheme(domain, doc)}`);
 
 	let style = doc.createElement(`style`);
 	style.id = galk.globalStylesheet;
@@ -3080,7 +3159,7 @@ const ensureApplyGlobalStyleRules = function(state, doc, getRules) {
 		style.sheet.insertRule(rule, style.sheet.cssRules.length);};
 };
 
-const getInlineViewTheme = function({name}, doc) {
+const getSlideViewTheme = function({name}, doc) {
 	/* dark page → light theme
 	light page → dark theme */
 
@@ -3122,17 +3201,17 @@ const getGlobalStyleRules = function(domain) {
 		/* --- vars --- */
 
 		`:root {
-			--${galk.cIvBg} : hsl(232, 17%, 46%);
-			--${galk.rIvInactOpacity} : 0.6;
-			--${galk.cIvAction} : hsl(33, 100%, 70%);
+			--${galk.cSvBg} : hsl(232, 17%, 46%);
+			--${galk.rSvInactOpacity} : 0.6;
+			--${galk.cSvAction} : hsl(33, 100%, 70%);
 			--${galk.cExLink} : hsl(233, 100%, 75%);
 			--${galk.cNoteBg} : hsla(60, 100%, 96.7%, 0.3);
 			--${galk.cNoteBorder} : hsla(0, 0%, 0%, 0.3);
 			--${galk.cNoteCaption} : hsla(0, 0%, 10%, 1);
 			--${galk.cNoteCaptionBg} : hsla(60, 100%, 96.7%, 0.95);
-			--${galk.dIvWidth} : 185mm;
-			--${galk.dIvContentMinHeight} : 74mm;
-			--${galk.dIvBarHeight} : 11mm;
+			--${galk.dSvWidth} : 185mm;
+			--${galk.dSvContentMinHeight} : 74mm;
+			--${galk.dSvBarHeight} : 11mm;
 			--${galk.dThumbOvrBtnSize} : 15mm;
 		}`,
 
@@ -3144,75 +3223,75 @@ const getGlobalStyleRules = function(domain) {
 			--${galk.cBase} : hsla(0, 0%, 100%, 0.5);
 		}`,
 
-		/* --- inline view --- */
+		/* --- slide-view --- */
 
-		`.${galk.ivPanel} {
+		`.${galk.svPanel} {
 			display : flex;
 			flex-direction : column;
 			align-items : center;
 			justify-content : flex-start;
-			min-height : calc(var(--${galk.dIvContentMinHeight}) + 50vh);
+			min-height : calc(var(--${galk.dSvContentMinHeight}) + 50vh);
 		}`,
 
-		`.${galk.ivPanel}[hidden], .${galk.ivPanel} [hidden] {
+		`.${galk.svPanel}[hidden], .${galk.svPanel} [hidden] {
 			display : none; /* necessary due to 'reset' stylesheets */
 		}`,
 
-		`.${galk.ivCtrlBar} {
+		`.${galk.svCtrlBar} {
 			max-width : 100vw;
-			width : var(--${galk.dIvWidth});
-			min-height : var(--${galk.dIvBarHeight});
+			width : var(--${galk.dSvWidth});
+			min-height : var(--${galk.dSvBarHeight});
 		}`,
 
-		`.${galk.ivCtrlBar} > * {
+		`.${galk.svCtrlBar} > * {
 			background-color : var(--${galk.cBase});
-			opacity : var(--${galk.rIvInactOpacity});
+			opacity : var(--${galk.rSvInactOpacity});
 		}`,
 
-		`.${galk.ivContentPanel} {
+		`.${galk.svContentPanel} {
 			display : flex;
 			align-items : center;
 			max-width : 100%; /* make extra-wide images overflow to the right */
-			min-height : var(--${galk.dIvContentMinHeight});
+			min-height : var(--${galk.dSvContentMinHeight});
 		}`,
 
-		`.${galk.ivContentStack} {
+		`.${galk.svContentStack} {
 			display : grid;
 			justify-items : center;
 			align-items : center;
 			position : relative;
 		}`,
 
-		`.${galk.ivContentStack} > * {
+		`.${galk.svContentStack} > * {
 			grid-column : 1;
 			grid-row : 1;
 		}`,
 
-		`.${galk.ivContentStack}.${galk.scaleMode}-fit {
+		`.${galk.svContentStack}.${galk.scaleMode}-fit {
 			max-width : 100vw;
 		}`,
 
-		`.${galk.ivContentStack}.${galk.scaleMode}-fit > * {
+		`.${galk.svContentStack}.${galk.scaleMode}-fit > * {
 			max-width : 100%;
 			max-height : 100vh;
 		}`,
 
-		`.${galk.ivContentStack} > .${galk.media} {
+		`.${galk.svContentStack} > .${galk.media} {
 			z-index : 2;
 		}`,
 
-		`.${galk.ivContentStack} > .${galk.mediaSample} {
+		`.${galk.svContentStack} > .${galk.mediaSample} {
 			z-index : 1;
 		}`,
 
-		`.${galk.ivContentStack} > .${galk.mediaThumbnail} {
+		`.${galk.svContentStack} > .${galk.mediaThumbnail} {
 			z-index : 0;
 			opacity : 0.5;
 			filter : blur(1.32mm);
 		}`,
 
-		`.${galk.ivContentStack} > .${galk.mediaSample},
-		.${galk.ivContentStack} > .${galk.mediaThumbnail}
+		`.${galk.svContentStack} > .${galk.mediaSample},
+		.${galk.svContentStack} > .${galk.mediaThumbnail}
 		{
 			width : auto;
 			height : 100%;
@@ -3227,25 +3306,26 @@ const getGlobalStyleRules = function(domain) {
 			display : flex;
 			justify-content : center;
 			align-items : center;
-			width : var(--${galk.dIvWidth});
+			width : var(--${galk.dSvWidth});
 			min-height : 50vh;
-			background-color : var(--${galk.cIvBg});
+			background-color : var(--${galk.cSvBg});
 			opacity : 0.75;
 		}`,
 
 		`.${galk.mediaUnavailable} > img {
-			width : calc(var(--${galk.dIvWidth}) * 0.8);
+			width : calc(var(--${galk.dSvWidth}) * 0.8);
 		}`,
 
-		`.${galk.ivContentStack} > .${galk.ctrlOverlay} {
+		`.${galk.svContentStack} > .${galk.ctrlOverlay} {
 			z-index : 3;
 			min-width : 100%;
 			max-width : 100vw;
-			width : var(--galkontinuum-dIvWidth);
+			width : var(--galkontinuum-dSvWidth);
 			height : 100%;
+			position : absolute; /* don't affect the w/h of the stack */
 		}`,
 
-		`.${galk.ivContentStack} > .${galk.notesOverlay} {
+		`.${galk.svContentStack} > .${galk.notesOverlay} {
 			z-index : 4;
 			width : 100%;
 			height : 100%;
@@ -3272,7 +3352,7 @@ const getGlobalStyleRules = function(domain) {
 			border-color : var(--${galk.cNoteBorder});
 		}`,
 
-		`.${galk.ivPanel}:not(.${galk.notesVisible})
+		`.${galk.svPanel}:not(.${galk.notesVisible})
 			.${galk.notesOverlay} > figure
 		{
 			display : none;
@@ -3298,14 +3378,14 @@ const getGlobalStyleRules = function(domain) {
 
 		/* --- controls --- */
 
-		`.${galk.ivCtrlBar} {
+		`.${galk.svCtrlBar} {
 			display : flex;
 			flex-direction : row;
 			align-items : stretch;
 			justify-content : center;
 		}`,
 
-		`.${galk.ivCtrlBar} > * {
+		`.${galk.svCtrlBar} > * {
 			/* equal sizes: */
 			flex-basis : 0;
 			flex-grow : 1;
@@ -3316,90 +3396,90 @@ const getGlobalStyleRules = function(domain) {
 			justify-content : center;
 		}`,
 
-		`.${galk.ivCtrlBar} > a:hover,
-		.${galk.ivPanel}.${galk.notesVisible}
-			.${galk.ivCtrlBar} > .${galk.notes}
+		`.${galk.svCtrlBar} > a:hover,
+		.${galk.svPanel}.${galk.notesVisible}
+			.${galk.svCtrlBar} > .${galk.notes}
 		{
 			opacity : 1;
 		}`,
 
-		`.${galk.ivCtrlBar} .${galk.btnIcon} {
-			width : calc(var(--${galk.dIvBarHeight}) * 0.7);
-			height : calc(var(--${galk.dIvBarHeight}) * 0.7);
+		`.${galk.svCtrlBar} .${galk.btnIcon} {
+			width : calc(var(--${galk.dSvBarHeight}) * 0.7);
+			height : calc(var(--${galk.dSvBarHeight}) * 0.7);
 			background-size : contain;
 			background-repeat : no-repeat;
 			background-position : center;
 			background-image : url(${svgHref(svgCircleRing)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.disabled} > .${galk.btnIcon} {
+		`.${galk.svCtrlBar} > .${galk.disabled} > .${galk.btnIcon} {
 			opacity : 0.4;
 			background-image : url(${svgHref(svgCircleRing)}) !important;
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.scale}.${galk.scaleMode}-full
+		`.${galk.svCtrlBar} > .${galk.scale}.${galk.scaleMode}-full
 			> .${galk.btnIcon}
 		{
 			background-image : url(${svgHref(svgCircleExpand)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.scale}.${galk.scaleMode}-fit
+		`.${galk.svCtrlBar} > .${galk.scale}.${galk.scaleMode}-fit
 			> .${galk.btnIcon}
 		{
 			background-image : url(${svgHref(svgCircleContract)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.postPage}:hover {
+		`.${galk.svCtrlBar} > .${galk.postPage}:hover {
 			background-color : var(--${galk.cExLink});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.postPage} > .${galk.btnIcon} {
+		`.${galk.svCtrlBar} > .${galk.postPage} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleLink)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.close}:hover {
-			background-color : var(--${galk.cIvAction});
+		`.${galk.svCtrlBar} > .${galk.close}:hover {
+			background-color : var(--${galk.cSvAction});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.close} > .${galk.btnIcon} {
+		`.${galk.svCtrlBar} > .${galk.close} > .${galk.btnIcon} {
 			background-image : url(${svgCircleArrowUpHref});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.defocus} > .${galk.btnIcon} {
+		`.${galk.svCtrlBar} > .${galk.defocus} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleCtrlOverlay)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.help} > .${galk.btnIcon} {
+		`.${galk.svCtrlBar} > .${galk.help} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleQuestion)});
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.notes} > .${galk.btnIcon} {
+		`.${galk.svCtrlBar} > .${galk.notes} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleNote)});
 		}`,
 
-		`:root.${galk.mediaIsFocused} .${galk.ivCtrlBar} > .${galk.close} {
+		`:root.${galk.mediaIsFocused} .${galk.svCtrlBar} > .${galk.close} {
 			display : none;
 		}`,
 
-		`:root:not(.${galk.mediaIsFocused}) .${galk.ivCtrlBar}
+		`:root:not(.${galk.mediaIsFocused}) .${galk.svCtrlBar}
 			> .${galk.defocus}
 		{
 			display : none;
 		}`,
 
-		`.${galk.ivPanel}:not(.${galk.notesVisible})
-			.${galk.ivCtrlBar} > .${galk.notes}:hover
+		`.${galk.svPanel}:not(.${galk.notesVisible})
+			.${galk.svCtrlBar} > .${galk.notes}:hover
 			> .${galk.btnIcon}
 		{
-			opacity : var(--${galk.rIvInactOpacity});
+			opacity : var(--${galk.rSvInactOpacity});
 		}`,
 
-		`.${galk.ivCtrlBar} > a {
+		`.${galk.svCtrlBar} > a {
 			cursor : pointer;
 		}`,
 
-		`.${galk.ivCtrlBar} > .${galk.pending},
-		.${galk.ivCtrlBar} > .${galk.disabled}
+		`.${galk.svCtrlBar} > .${galk.pending},
+		.${galk.svCtrlBar} > .${galk.disabled}
 		{
 			cursor : none;
 			pointer-events : none;
@@ -3428,7 +3508,7 @@ const getGlobalStyleRules = function(domain) {
 			display : flex;
 			justify-content : center;
 			align-items : center;
-			background-color : var(--${galk.cIvBg});
+			background-color : var(--${galk.cSvBg});
 			opacity : 0;
 		}`,
 
@@ -3456,7 +3536,7 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.ctrlOverlay} > * > .${galk.btnIcon} {
-			width : calc(var(--${galk.dIvWidth}) / 5);
+			width : calc(var(--${galk.dSvWidth}) / 5);
 			max-width : 60%;
 			height : 100%;
 			background-size : contain;
@@ -3476,7 +3556,7 @@ const getGlobalStyleRules = function(domain) {
 		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:hover,
 		.${galk.ctrlOverlay} > .${galk.focus}:hover > .${galk.btnIcon}
 		{
-			opacity : var(--${galk.rIvInactOpacity});
+			opacity : var(--${galk.rSvInactOpacity});
 		}`,
 
 		`.${galk.focus} > .${galk.btnIcon} {
@@ -3549,7 +3629,7 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.thumbOverlay} > a.${galk.open} {
-			background-color : var(--${galk.cIvAction});
+			background-color : var(--${galk.cSvAction});
 		}`,
 
 		`.${galk.thumbOverlay} > a.${galk.open} > .${galk.btnIcon} {
@@ -3568,7 +3648,7 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgCircleArrowUpHref});
 		}`,
 
-		`:root.${galk.ivLayoutState}-pending
+		`:root.${galk.svLayoutState}-pending
 			.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}
 			> .${galk.btnIcon}
 		{
@@ -3625,12 +3705,12 @@ const getGlobalStyleRules = function(domain) {
 			overflow-x : unset;
 		}`,
 
-		`.${galk.ivPanel} > header, .${galk.ivPanel} > footer {
+		`.${galk.svPanel} > header, .${galk.svPanel} > footer {
 			/* override <header> style set by danbooru: */
 			margin : 0;
 		}`,
 
-		`.${galk.ivPanel} figure {
+		`.${galk.svPanel} figure {
 			/* override default browser style: */
 			margin : 0;
 		}`,
