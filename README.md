@@ -75,17 +75,13 @@ Be aware that the script will not update automatically when installed this way.
 
 ## Limitations
 
-- Markup is not supported in note text.
+- Navigating through results is only possible if they are ordered by ID
+(ascending or descending). Note that on Moebooru-based sites, the default
+order is by timestamp, not by ID — you can enable navigation by appending
+`order:id_desc` to your search terms.
 
 - On Gelbooru-based sites, posts added within the last few minutes may fail to
 load due to the search database being out of sync with the main database.
-
-- Navigating through results is only possible if they are ordered by ID
-(ascending or descending). Note that on Moebooru-based sites, the default
-order is by timestamp, not by ID.
-
-- Overlay controls are disabled for SWFs, as they could obstruct pointer
-interaction.
 
 - On Danbooru-based sites, [restricted posts][danbooru wiki censored tags]
 might not be excluded when navigating through results, despite being hidden in
@@ -101,7 +97,9 @@ when 6 search terms are used, navigation in one or both directions may fail due
 to inadequacies in the `/post/index` API requiring an additional tags to be
 inserted.
 
-- On Danbooru-based sites, only up to 1000 notes will be shown on any single
+- Markup is not supported in note text.
+
+- On Danbooru-based sites, a maximum of 1000 notes will be shown on any single
 post. Currently the only post known to have over 1000 notes is
 [#951241][danbooru post 1k notes] on Danbooru.
 
