@@ -97,17 +97,13 @@ Be aware that the script will not update automatically when installed this way.
 
 ## Limitations
 
-- Markup is not supported in note text.
+- Navigating through results is only possible if they are ordered by ID
+(ascending or descending). Note that on Moebooru-based sites, the default
+order is by timestamp, not by ID — you can enable navigation by appending
+\`order:id_desc\` to your search terms.
 
 - On Gelbooru-based sites, posts added within the last few minutes may fail to
 load due to the search database being out of sync with the main database.
-
-- Navigating through results is only possible if they are ordered by ID
-(ascending or descending). Note that on Moebooru-based sites, the default
-order is by timestamp, not by ID.
-
-- Overlay controls are disabled for SWFs, as they could obstruct pointer
-interaction.
 
 - On Danbooru-based sites, [restricted posts][danbooru wiki censored tags]
 might not be excluded when navigating through results, despite being hidden in
@@ -123,7 +119,9 @@ when 6 search terms are used, navigation in one or both directions may fail due
 to inadequacies in the \`/post/index\` API requiring an additional tags to be
 inserted.
 
-- On Danbooru-based sites, only up to 1000 notes will be shown on any single
+- Markup is not supported in note text.
+
+- On Danbooru-based sites, a maximum of 1000 notes will be shown on any single
 post. Currently the only post known to have over 1000 notes is
 [#951241][danbooru post 1k notes] on Danbooru.
 
@@ -150,19 +148,16 @@ range.
 
 known issues:
 
-	- pressing escape stops gif playback (test normal browsers)
-	- moebooru: -status:deleted doesn't work
-	- note tooltip may appear off-screen
-		(e.g. https://e621.net/post/index?tags=id:1002)
-	- blacklist may interfere on moebooru
-	- buttons too small on e621 on mobile
 	- probably won't work with danbooru's zip-player videos
 		test: https://danbooru.donmai.us/posts/3471696
 	- player appears with wrong dimensions before video starts loading
-	- navigating on danbooru does't skip restricted posts
-		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
+	- pressing escape stops gif playback (test normal browsers)
+	- blacklist may interfere on moebooru
+	- navigating on danbooru does't skip restricted posts
+		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
+	- buttons too small on e621 on mobile
 	- gelbooru: thumbnail overlay is exactly the size of the thumbnail itself:
 		https://i.imgur.com/YJjIzxt.png
 	- browser history doesn't work well on danbooru since they append ?q=…
@@ -181,17 +176,18 @@ known issues:
 
 planned enhancements:
 
-	- smarter prefetching
+	- rule34: use sin's api for getting post info
 	- more hotkeys
 	- help/about page
 		- reload button
 	- property sheet
-	- navigation on current page without API requests
+	- navigation on current page without API requests?
 	- post pages: add a link back to the gallery page on which it appears (?)
 	- options page
 		- settings for showing fullsize/thumbnail/sample
 			loading full-size images may not always be desirable
 			(e.g. mobile browsing with small data allowance)
+	- markup in notes?
 
 test cases:
 
@@ -295,6 +291,10 @@ references:
 	danbooru search term limit:
 		/danbooru/blob/master/config/danbooru_default_config.rb
 			→ is_unlimited_tag?(tag)
+
+	moebooru hide_pending_posts config:
+		https://github.com/moebooru/moebooru/blob/
+			5236247847294d70a70cd9d6589d647c3df922bf/config/init_config.rb#L263
 
 	danbooru restricted tags:
 		https://danbooru.donmai.us/wiki_pages/84990
@@ -690,7 +690,7 @@ const onKeyDownGlobal = function(ev) {
 	if (view === null) {
 		/* no hotkeys are active unless the view exists */
 
-	} else if (!nodesAreCoaxial(view, ev.target)
+	} else if (!nodesAreHierarchicallyCoaxial(view, ev.target)
 		&& ev.target.closest(`.${galk.thumbOverlay}`) === null)
 	{
 		/* hotkeys are only active in the view's axis or thumbnail overlay */
@@ -1310,9 +1310,20 @@ const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
 			continue;};
 
 		let el = doc.createElement(`figure`);
-		el.appendChild(
+
+		let captionContainer =
+			Object.assign(doc.createElement(`section`),
+				{className : galk.noteCaptionContainer});
+
+		captionContainer.appendChild(
+			Object.assign(doc.createElement(`section`),
+				{className : galk.noteCaptionOffset}));
+
+		captionContainer.appendChild(
 			Object.assign(doc.createElement(`figcaption`),
 				{textContent : note.text}));
+
+		el.appendChild(captionContainer);
 
 		el.style.left = `calc((${note.x} / ${width}) * 100%)`;
 		el.style.top = `calc((${note.y} / ${height}) * 100%)`;
@@ -1514,177 +1525,6 @@ const mediaIsFocused = function(doc) {
 	return doc.documentElement.classList.contains(galk.mediaIsFocused);
 };
 
-const searchExprEquiv = function(a, b) {
-	if (a === b) {
-		return true;};
-
-	dbg && assert(typeof a === `object`);
-	dbg && assert(typeof b === `object`);
-
-	return a.orderTerm === a.orderTerm
-		&& a.statusTerm === b.statusTerm
-		&& sequiv(a.terms, b.terms)
-		&& sequiv(a.idTerms, b.idTerms);
-};
-
-const searchExprIdOrder = function(state, expr) {
-	/* 1 : ordered by id ascending
-	-1 : ordered by id descending
-	undefined : ordered by some other property */
-
-	dbg && assert(typeof expr === `object`);
-
-	let domain = getDomain(state);
-
-	if (expr === null || expr.orderTerm === undefined) {
-		if (domain.subkind === `moebooru`) {
-			/* default gallery order is index_timestamp desc
-			(an order that cannot be specified in api queries): */
-			return undefined;
-		};
-
-		/* in all other boorus, default gallery order is id desc: */
-		return -1;
-	};
-
-	switch (domain.kind) {
-		case `danbooru` :
-			if (expr.orderTerm === `id`) {return 1;};
-			if (expr.orderTerm === `id_desc`) {return -1;};
-
-			if (expr.orderTerm === `id_asc`
-				&& domain.subkind !== `moebooru`)
-			{
-				/* works on e621 and danbooru; not on moebooru */
-				return 1;};
-
-			break;
-
-		case `gelbooru` :
-			if (expr.orderTerm === `id:asc`) {return 1;};
-			/* id:<anything> is effectively equivalent to id:desc */
-			if (expr.orderTerm === `id`) {return -1;};
-			if (expr.orderTerm.startsWith(`id:`)) {return -1;};
-			break;
-
-		default :
-			dbg && assert(false);
-	};
-
-	return undefined;
-};
-
-const getOrderPrefix = function(domain) {
-	return domain.kind === `danbooru`
-		? `order:`
-		: `sort:`;
-};
-
-const parseSearchExprString = function(state, exprString = ``) {
-	dbg && assert(typeof exprString === `string`);
-
-	let domain = getDomain(state);
-
-	if (domain.kind === `gelbooru` && exprString === `all`) {
-		/* note: only applies when no leading/trailing space */
-		exprString = ``;
-	};
-
-	let terms = [];
-	let idTerms = [];
-	let orderTerm = undefined;
-	let statusTerm = undefined;
-
-	let orderPrefix = getOrderPrefix(domain);
-
-	for (let s of exprString.split(/\s/)) {
-		if (!s.length) {
-			continue;};
-
-		s = s.toLowerCase();
-
-		if (s.startsWith(`id:`)) {
-			idTerms.push(s.slice(3));
-		} else if (s.startsWith(`-id:`)) {
-			idTerms.push(`-`+s.slice(4));
-
-		} else if (s.startsWith(orderPrefix)) {
-			/* later term takes precedence; earlier terms are ignored */
-			orderTerm = s.slice(orderPrefix.length);
-
-		} else if (domain.kind === `danbooru` && s.startsWith(`status:`)) {
-			/* later term takes precedence; earlier terms are ignored */
-			statusTerm = s.slice(7);
-		} else if (domain.kind === `danbooru` && s.startsWith(`-status:`)) {
-			statusTerm = `-`+s.slice(8);
-
-		} else {
-			terms.push(s);};
-	};
-
-	switch (domain.kind) {
-		case `danbooru` :
-			if (statusTerm === undefined && domain.subkind !== `moebooru`) {
-				/* implicit default if no other status filter is specified: */
-				statusTerm = `-deleted`;};
-
-			/* only the last `id:` or `-id:` term is used */
-			idTerms = idTerms.slice(-1);
-			break;
-
-		case `gelbooru` :
-			break;
-
-		default :
-			dbg && assert(false);
-	};
-
-	return {
-		terms,
-		idTerms,
-		orderTerm,
-		statusTerm,};
-};
-
-const searchExprAllTerms = function(domain, expr) {
-	dbg && assert(typeof expr === `object`);
-	if (expr === null) {
-		return [];};
-
-	let terms = [];
-
-	if (expr.orderTerm !== undefined) {
-		dbg && assert(typeof expr.orderTerm === `string`);
-		terms.push(getOrderPrefix(domain)+expr.orderTerm);
-	};
-
-	if (expr.statusTerm !== undefined) {
-		let x = expr.statusTerm;
-		dbg && assert(typeof x === `string`);
-		terms.push(
-			x[0] === `-`
-				? `-status:`+x.slice(1)
-				: `status:`+x);
-	};
-
-	dbg && assert(Array.isArray(expr.idTerms));
-	for (let x of expr.idTerms) {
-		dbg && assert(typeof x === `string`);
-		terms.push(
-			x[0] === `-`
-				? `-id:`+x.slice(1)
-				: `id:`+x);
-	};
-
-	dbg && assert(Array.isArray(expr.terms));
-	for (let x of expr.terms) {
-		dbg && assert(typeof x === `string`);
-		terms.push(x);
-	};
-
-	return terms;
-};
-
 const getThumbClass = function({name}) {
 	dbg && assert(typeof name === `string`);
 
@@ -1742,6 +1582,286 @@ const getForwardDanbooruTooltipEventsScriptText = `{
 	/* note: jQuery mouseenter/mouseleave events are
 		equivalent to native mouseover/mouseout events */
 };`;
+
+/* --- state --- */
+
+const fragmentPrefix = `#`+namespace+`:`;
+
+const stateFromUrl = function(url) {
+	if (!(url instanceof URL)) {
+		return null;};
+
+	let origin = url.origin;
+
+	if (getDomain({origin}) === undefined) {
+		/* unknown site */
+		return null;};
+
+	return {
+		currentPostId : postIdFromUrl({origin}, url),
+		scaleMode : `fit`,
+		origin : url.origin,
+		searchExpr : parseSearchExprString({origin},
+			searchExprStringFromUrl({origin}, url)),
+		...stateFromFragment(url.hash),};
+};
+
+const stateFromFragment = function(frag) {
+	if (typeof frag !== `string` || !frag.startsWith(fragmentPrefix)) {
+		return null;};
+
+	let src = frag.slice(fragmentPrefix.length);
+	let state = tryParseJson(decodeURIComponent(src));
+	if (typeof state !== `object`) {
+		return null;};
+
+	return state;
+};
+
+const stateAsFragment = function(state, baseHref) {
+	let fragState = {};
+
+	/* only include fields which differ from what can be derived from the rest
+	of the url */
+
+	let baseUrl = tryParseHref(baseHref);
+	if (baseUrl !== null) {
+		baseUrl.hash = ``;};
+
+	let base = stateFromUrl(baseUrl);
+	if (base === null) {
+		fragState = state;
+	} else {
+		for (let k of new Set(chain(Object.keys(state), Object.keys(base)))) {
+			let v1 = state[k];
+			let v2 = base[k];
+			if (k === `searchExpr`) {
+				if (!searchExprEquiv(v1, v2)) {
+					fragState[k] = v1;};
+			} else if (v1 !== v2) {
+				fragState[k] = v1;};
+		};
+	};
+
+	return fragmentPrefix+encodeURIComponent(JSON.stringify(fragState));
+};
+
+const getDomain = function({origin}) {
+	dbg && assert(typeof origin === `string`);
+
+	let url = tryParseHref(origin);
+	if (url === null) {
+		return null;};
+
+	let domain = hostnameDomainTbl[url.hostname];
+	if (typeof domain !== `object`) {
+		return null;};
+
+	dbg && assert(typeof domain.name === `string`);
+	dbg && assert(typeof domain.kind === `string`);
+	dbg && assert(typeof domain.subkind === `string`
+		|| domain.kind !== `danbooru`);
+
+	return domain;
+};
+
+const parseSearchExprString = function(state, exprString = ``) {
+	dbg && assert(typeof exprString === `string`);
+
+	let domain = getDomain(state);
+
+	if (domain.kind === `gelbooru` && exprString === `all`) {
+		/* note: only applies when no leading/trailing space */
+		exprString = ``;
+	};
+
+	let useStatus = domain.kind === `danbooru`
+		 && domain.subkind !== `moebooru`;
+
+	let terms = [];
+	let idTerms = [];
+	let orderTerm = undefined;
+	let statusTerm = undefined;
+	let holdsTerm = undefined;
+	let pendingTerm = undefined;
+
+	let orderPrefix = getOrderPrefix(domain);
+
+	for (let s of exprString.split(/\s/)) {
+		if (!s.length) {
+			continue;};
+
+		s = s.toLowerCase();
+
+		if (s.startsWith(`id:`)) {
+			idTerms.push(s.slice(3));
+		} else if (s.startsWith(`-id:`)) {
+			idTerms.push(`-`+s.slice(4));
+
+		} else if (s.startsWith(orderPrefix)) {
+			/* later term takes precedence; earlier terms are ignored */
+			orderTerm = s.slice(orderPrefix.length);
+
+		} else if (useStatus && (
+			s.startsWith(`status:`) || s.startsWith(`-status:`)))
+		{
+			/* later term takes precedence; earlier terms are ignored */
+			statusTerm = s;
+
+		} else if (domain.subkind === `moebooru` && s.startsWith(`holds:`)) {
+			/* later term takes precedence; earlier terms are ignored */
+			holdsTerm = s;
+
+		} else if (domain.subkind === `moebooru` && s.startsWith(`pending:`)) {
+			/* later term takes precedence; earlier terms are ignored */
+			pendingTerm = s;
+
+		} else {
+			terms.push(s);};
+	};
+
+	switch (domain.kind) {
+		case `danbooru` :
+			/* default behaviour differs between gallery results and API
+			results; the following applies defaults for non-api searches: */
+
+			if (useStatus && statusTerm === undefined) {
+				/* implicit default if no other status: filter is specified */
+				statusTerm = `-status:deleted`;};
+
+			if (domain.subkind === `moebooru`) {
+				if (holdsTerm !== `holds:true`
+					&& holdsTerm !== `holds:all`)
+				{
+					/* implicit default if no valid holds: filter specified */
+					holdsTerm = `holds:false`;};
+
+				if (domain.name === `yandere`
+					&& pendingTerm !== `pending:true`
+					&& pendingTerm !== `pending:all`)
+				{
+					/* implicit default if no valid pending: filter specified */
+					pendingTerm = `pending:false`;};
+			};
+
+			/* only the last `id:` or `-id:` term is used */
+			idTerms = idTerms.slice(-1);
+			break;
+
+		case `gelbooru` :
+			break;
+
+		default :
+			dbg && assert(false);
+	};
+
+	if (statusTerm !== undefined) {
+		terms.push(statusTerm);};
+	if (holdsTerm !== undefined) {
+		terms.push(holdsTerm);};
+	if (pendingTerm !== undefined) {
+		terms.push(pendingTerm);};
+
+	return {
+		terms,
+		idTerms,
+		orderTerm,};
+};
+
+const searchExprAllTerms = function(domain, expr) {
+	dbg && assert(typeof expr === `object`);
+	if (expr === null) {
+		return [];};
+
+	let terms = [];
+
+	if (expr.orderTerm !== undefined) {
+		dbg && assert(typeof expr.orderTerm === `string`);
+		terms.push(getOrderPrefix(domain)+expr.orderTerm);
+	};
+
+	dbg && assert(Array.isArray(expr.idTerms));
+	for (let x of expr.idTerms) {
+		dbg && assert(typeof x === `string`);
+		terms.push(
+			x[0] === `-`
+				? `-id:`+x.slice(1)
+				: `id:`+x);
+	};
+
+	dbg && assert(Array.isArray(expr.terms));
+	for (let x of expr.terms) {
+		dbg && assert(typeof x === `string`);
+		terms.push(x);
+	};
+
+	return terms;
+};
+
+const searchExprEquiv = function(a, b) {
+	if (a === b) {
+		return true;};
+
+	dbg && assert(typeof a === `object`);
+	dbg && assert(typeof b === `object`);
+
+	return a.orderTerm === a.orderTerm
+		&& sequiv(a.terms, b.terms)
+		&& sequiv(a.idTerms, b.idTerms);
+};
+
+const searchExprIdOrder = function(state, expr) {
+	/* 1 : ordered by id ascending
+	-1 : ordered by id descending
+	undefined : ordered by some other property */
+
+	dbg && assert(typeof expr === `object`);
+
+	let domain = getDomain(state);
+
+	if (expr === null || expr.orderTerm === undefined) {
+		if (domain.subkind === `moebooru`) {
+			/* default gallery order is index_timestamp desc
+			(an order that cannot be specified in api queries): */
+			return undefined;
+		};
+
+		/* in all other boorus, default gallery order is id desc: */
+		return -1;
+	};
+
+	switch (domain.kind) {
+		case `danbooru` :
+			if (expr.orderTerm === `id`) {return 1;};
+			if (expr.orderTerm === `id_desc`) {return -1;};
+
+			if (expr.orderTerm === `id_asc`
+				&& domain.subkind !== `moebooru`)
+			{
+				/* works on e621 and danbooru; not on moebooru */
+				return 1;};
+
+			break;
+
+		case `gelbooru` :
+			if (expr.orderTerm === `id:asc`) {return 1;};
+			/* id:<anything> is effectively equivalent to id:desc */
+			if (expr.orderTerm === `id`) {return -1;};
+			if (expr.orderTerm.startsWith(`id:`)) {return -1;};
+			break;
+
+		default :
+			dbg && assert(false);
+	};
+
+	return undefined;
+};
+
+const getOrderPrefix = function(domain) {
+	return domain.kind === `danbooru`
+		? `order:`
+		: `sort:`;
+};
 
 /* --- post metadata --- */
 
@@ -2002,7 +2122,7 @@ const tryNavigatePostId = async function(
 		state, searchExpr, fromPostId, direction);
 };
 
-const navigatePostInfoPrefetchThreshold = 2; // todo: increase
+const navigatePostInfoPrefetchThreshold = 2;
 
 const maybePrefetchNavigatePostId = function(
 	state, searchExpr, fromPostId, direction)
@@ -2019,7 +2139,7 @@ const maybePrefetchNavigatePostId = function(
 	};
 };
 
-const navigatePostInfoRequPageLen = 5; // todo: increase
+const navigatePostInfoRequPageLen = 5;
 
 const tryRequestNavigatePostId = async function(
 	state, searchExpr, fromPostId, direction)
@@ -2114,6 +2234,11 @@ const postInfosFromDanbooruApiPostsList = function(state, posts) {
 	};
 	return infos;
 };
+
+const danbooruApiPostFieldsSelector = [
+	`id`, `md5`, `image_width`, `width`, `image_height`, `height`, `file_url`,
+	`large_file_url`, `sample_url`, `preview_file_url`, `preview_url`,]
+	.join(`,`);
 
 const postInfoFromDanbooruApiPost = function(state, post) {
 	if (typeof post !== `object`
@@ -2211,6 +2336,10 @@ const postInfoFromGelbooruApiPostElem = function(state, post) {
 		md5,};
 };
 
+const danbooruApiNoteFieldsSelector = [
+	`body`, `x`, `y`, `width`, `height`, `is_active`,]
+	.join(`,`);
+
 const postNotesFromDanbooruApiNotesList = function(state, postId, rawNotes) {
 	/* no results → [],
 		malformed results → throw */
@@ -2293,192 +2422,6 @@ const reportInvalidResponse = function(href, xhr) {
 
 /* --- urls --- */
 
-const fragmentPrefix = `#`+namespace+`:`;
-
-const stateFromUrl = function(url) {
-	if (!(url instanceof URL)) {
-		return null;};
-
-	let origin = url.origin;
-
-	if (getDomain({origin}) === undefined) {
-		/* unknown site */
-		return null;};
-
-	return {
-		currentPostId : postIdFromUrl({origin}, url),
-		scaleMode : `fit`,
-		origin : url.origin,
-		searchExpr : parseSearchExprString({origin},
-			searchExprStringFromUrl({origin}, url)),
-		...stateFromFragment(url.hash),};
-};
-
-const stateFromFragment = function(frag) {
-	if (typeof frag !== `string` || !frag.startsWith(fragmentPrefix)) {
-		return null;};
-
-	let src = frag.slice(fragmentPrefix.length);
-	let state = tryParseJson(decodeURIComponent(src));
-	if (typeof state !== `object`) {
-		return null;};
-
-	return state;
-};
-
-const stateAsFragment = function(state, baseHref) {
-	let fragState = {};
-
-	/* only include fields which differ from what can be derived from the rest
-	of the url */
-
-	let baseUrl = tryParseHref(baseHref);
-	if (baseUrl !== null) {
-		baseUrl.hash = ``;};
-
-	let base = stateFromUrl(baseUrl);
-	if (base === null) {
-		fragState = state;
-	} else {
-		for (let k of new Set(chain(Object.keys(state), Object.keys(base)))) {
-			let v1 = state[k];
-			let v2 = base[k];
-			if (k === `searchExpr`) {
-				if (!searchExprEquiv(v1, v2)) {
-					fragState[k] = v1;};
-			} else if (v1 !== v2) {
-				fragState[k] = v1;};
-		};
-	};
-
-	return fragmentPrefix+encodeURIComponent(JSON.stringify(fragState));
-};
-
-const getDomain = function({origin}) {
-	dbg && assert(typeof origin === `string`);
-
-	let url = tryParseHref(origin);
-	if (url === null) {
-		return null;};
-
-	let domain = hostnameDomainTbl[url.hostname];
-	if (typeof domain !== `object`) {
-		return null;};
-
-	dbg && assert(typeof domain.name === `string`);
-	dbg && assert(typeof domain.kind === `string`);
-	dbg && assert(typeof domain.subkind === `string`
-		|| domain.kind !== `danbooru`);
-
-	return domain;
-};
-
-//test(_ => {
-//	/* e621 search queries */
-//
-//	let url = new URL(`https://e621.net`);
-//	for (let [path, queryString, expect] of [
-//		[`/post`, ``, undefined],
-//		[`/post/`, ``, undefined],
-//		[`/post/index`, ``, undefined],
-//		[`/post/index/`, ``, undefined],
-//		[`/post/index/1`, ``, undefined],
-//		[`/post/index/1/`, ``, undefined],
-//		[`/post/index/1/id:<1837141 order:id`, ``, `id:<1837141 order:id`],
-//		[`/post/index/1/id:<1837141 order:id/`, ``, `id:<1837141 order:id`],
-//		[`/post/index/1/id:<1837141 order:id//`, ``, undefined],
-//		[`/post/index/1/id:<1837141 order:id/asdf`, ``, undefined],
-//		[`/post/index//id:<1837141 order:id`, ``, undefined],
-//		[`/post/index/1//id:<1837141 order:id`, ``, undefined],
-//		[`/post/index/asdf/id:<1837141 order:id`, ``, undefined],
-//		[`/post`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-//		[`/post/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-//		[`/post/index`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-//		[`/post/index/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-//		[`/post/index/1`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-//		[`/post/index/1/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-//		/* path takes precedence over querystring: */
-//		[`/post/index/1/absurdres`, `tags=id:<1837141 order:id`, `absurdres`],])
-//	{
-//		url.pathname = path;
-//		url.search = queryString;
-//
-//		assert(isGalleryUrl(url));
-//
-//		let {searchExpr} = stateFromUrl(url);
-//		assert(searchExpr === expect); // todo
-//	};
-//});
-
-//test(_ => {
-//	/* danbooru search queries */
-//
-//	let url = new URL(`https://danbooru.donmai.us`);
-//	for (let [path, queryString, expect] of [
-//		[`/`, ``, undefined],
-//		[`/posts`, ``, undefined],
-//		[`/posts/`, ``, undefined],
-//		[`/posts`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],
-//		[`/posts/`, `tags=id:<1837141 order:id`, `id:<1837141 order:id`],])
-//	{
-//		url.pathname = path;
-//		url.search = queryString;
-//
-//		assert(isGalleryUrl(url));
-//
-//		let {searchExpr} = stateFromUrl(url);
-//		assert(searchExpr === expect); // todo
-//	};
-//});
-
-//test(_ => {
-//	/* gelbooru search queries */
-//
-//	let url = new URL(`https://rule34.xxx`);
-//	for (let [path, queryString, expect] of [
-//		[`/`, `page=post&s=list&tags=all`, undefined],
-//		// todo
-//		])
-//	{
-//		url.pathname = path;
-//		url.search = queryString;
-//
-//		assert(isGalleryUrl(url));
-//
-//		let {searchExpr} = stateFromUrl(url);
-//		assert(searchExpr === expect); // todo
-//	};
-//});
-
-const searchExprStringFromUrl = function({origin}, url) {
-	dbg && assert(url instanceof URL);
-
-	let domain = getDomain({origin});
-
-	let s = url.searchParams.get(`tags`);
-
-	if (domain.kind === `danbooru`
-		&& domain.subkind !== `danbooru`)
-	{
-		let xs = tryParsePathFromUrl(url);
-		if (xs !== null
-			&& xs.length === 4
-			&& xs[0] === `post`
-			&& xs[1] === `index`
-			&& /^\d+$/.test(xs[2]))
-		{
-			/* path takes precedence searchParams */
-			s = xs[3];
-		};
-	};
-
-	if (typeof s !== `string` || !/\S/.test(s)) {
-		/* contains only whitespace characters */
-		return undefined;};
-
-	return s;
-};
-
 const isGalleryUrl = function(url) {
 	if (!(url instanceof URL)) {
 		return false;};
@@ -2520,6 +2463,35 @@ test(_ => {
 
 	// todo
 });
+
+const searchExprStringFromUrl = function({origin}, url) {
+	dbg && assert(url instanceof URL);
+
+	let domain = getDomain({origin});
+
+	let s = url.searchParams.get(`tags`);
+
+	if (domain.kind === `danbooru`
+		&& domain.subkind !== `danbooru`)
+	{
+		let xs = tryParsePathFromUrl(url);
+		if (xs !== null
+			&& xs.length === 4
+			&& xs[0] === `post`
+			&& xs[1] === `index`
+			&& /^\d+$/.test(xs[2]))
+		{
+			/* path takes precedence searchParams */
+			s = xs[3];
+		};
+	};
+
+	if (typeof s !== `string` || !/\S/.test(s)) {
+		/* contains only whitespace characters */
+		return undefined;};
+
+	return s;
+};
 
 const postIdFromUrl = function({origin}, url) {
 	if (!(url instanceof URL)) {
@@ -2563,6 +2535,7 @@ const requestPostInfoUrl = function(state, postId) {
 	switch (domain.kind) {
 		case `danbooru` :
 			url.pathname = `/post/index.json`;
+			url.searchParams.set(`only`, danbooruApiPostFieldsSelector);
 			url.searchParams.set(`limit`, `1`);
 			url.searchParams.set(`tags`, `id:${postId}`);
 
@@ -2590,6 +2563,8 @@ const requestPostNotesUrl = function(state, postId) {
 
 	switch (domain.kind) {
 		case `danbooru` :
+			url.searchParams.set(`only`, danbooruApiNoteFieldsSelector);
+
 			if (domain.subkind === `danbooru`) {
 				url.pathname = `/notes.json`;
 				url.searchParams.set(`search[post_id]`, `${postId}`);
@@ -2635,8 +2610,9 @@ const requestNavigatePostInfoUrl = function(
 
 	switch (domain.kind) {
 		case `danbooru` : {
-			url.searchParams.set(`limit`, `${navigatePostInfoRequPageLen}`);
 			url.pathname = `/post/index.json`;
+			url.searchParams.set(`only`, danbooruApiPostFieldsSelector);
+			url.searchParams.set(`limit`, `${navigatePostInfoRequPageLen}`);
 
 			let d = direction * idOrder; /* query direction */
 
@@ -2905,7 +2881,7 @@ const removeAllChildren = function(el) {
 		el.removeChild(el.firstChild);};
 };
 
-const nodesAreCoaxial = function(a, b) {
+const nodesAreHierarchicallyCoaxial = function(a, b) {
 	dbg && assert(a instanceof Node);
 	dbg && assert(b instanceof Node);
 
@@ -3304,15 +3280,15 @@ const getGlobalStyleRules = function(domain) {
 			visibility : hidden;
 		}`,
 
-		`.${galk.notesOverlay} > figure {
+		`.${galk.notesOverlay} figure {
 			position : absolute;
 			visibility : visible;
 			z-index : 0;
 			background : var(--${galk.cNoteBg});
 		}`,
 
-		`.${galk.notesOverlay} > figure,
-		.${galk.notesOverlay} > figure > figcaption
+		`.${galk.notesOverlay} figure,
+		.${galk.notesOverlay} figcaption
 		{
 			border-style : solid;
 			border-width : 1px;
@@ -3320,26 +3296,36 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.svPanel}:not(.${galk.notesVisible})
-			.${galk.notesOverlay} > figure
+			.${galk.notesOverlay} figure
 		{
 			display : none;
 		}`,
 
-		`.${galk.notesOverlay} > figure > figcaption {
+		`.${galk.notesOverlay} .${galk.noteCaptionContainer} {
+			height : 100%;
+		}`,
+
+		`.${galk.notesOverlay} .${galk.noteCaptionOffset} {
+			height : calc(100% + 1.85mm);
+		}`,
+
+		`.${galk.notesOverlay} figcaption {
 			visibility : hidden;
-			position : absolute;
+			position : sticky;
+			bottom : 0;
 			padding : 1mm;
-			top : calc(100% + 1.85mm);
+			min-width : -moz-min-content;
+			min-width : min-content;
 			border-color : var(--${galk.cNoteCaption});
 			color : var(--${galk.cNoteCaption});
 			background : var(--${galk.cNoteCaptionBg});
 		}`,
 
-		`.${galk.notesOverlay} > figure:hover {
+		`.${galk.notesOverlay} figure:hover {
 			z-index : 1;
 		}`,
 
-		`.${galk.notesOverlay} > figure:hover > figcaption {
+		`.${galk.notesOverlay} figure:hover figcaption {
 			visibility : visible;
 		}`,
 
@@ -3677,7 +3663,7 @@ const getGlobalStyleRules = function(domain) {
 			margin : 0;
 		}`,
 
-		`.${galk.svPanel} figure {
+		`.${galk.svPanel} figure, .${galk.thumbOverlay} figure {
 			/* override default browser style: */
 			margin : 0;
 		}`,
