@@ -3557,7 +3557,7 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.thumbOverlay} > a {
 			flex-grow : 1;
-			display : flex;
+			display : flex !important; /* important because danbooru */
 			align-items : center;
 			justify-content : center;
 			opacity : 0;
