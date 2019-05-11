@@ -315,7 +315,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.04",
-	"version_name": "2019.05.04 (47bed8c8591b93aae7e869f411e50d990dd08c15)",
+	"version_name": "2019.05.04 (ef0277278ab59d45087400dd46b453bd99260b18)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -3590,7 +3590,7 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.thumbOverlay} > a {
 			flex-grow : 1;
-			display : flex;
+			display : flex !important; /* important because danbooru */
 			align-items : center;
 			justify-content : center;
 			opacity : 0;
