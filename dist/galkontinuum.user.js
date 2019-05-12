@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.04
+// @version		2019.05.12
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL https://github.com/bipface/galkontinuum/tree/master/#readme
 // @downloadURL https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
@@ -371,8 +371,8 @@ const manifest = {
 	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
-	"version": "2019.05.04",
-	"version_name": "2019.05.04 (584359561467219c410320846cd94fcf6b4a8a8a)",
+	"version": "2019.05.12",
+	"version_name": "2019.05.12 (3b20e4f811744ea1afc474e2b2b1eef3fe62f9a3)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -3422,14 +3422,19 @@ const getGlobalStyleRules = function(domain) {
 		`.${galk.svContentStack} > .${galk.mediaThumbnail}
 		{
 			z-index : 0;
+			opacity : 0.5;
 		}`,
 
 		`.${galk.svContentStack}.${galk.hasThumbnail}
 			> .${galk.mediaThumbnail}
 		{
-			z-index : 0;
-			opacity : 0.5;
 			filter : blur(1.32mm);
+		}`,
+
+		`.${galk.svContentStack}:not(.${galk.hasThumbnail})
+			> .${galk.mediaThumbnail}
+		{
+			height : calc(var(--${galk.dSvContentMinHeight}) / 2);
 		}`,
 
 		`.${galk.svContentStack} > .${galk.mediaSample},
