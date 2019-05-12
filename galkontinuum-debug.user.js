@@ -168,7 +168,6 @@ range.
 known issues:
 
 	- danbooru ugoira |> badge broken (test other browsers)
-	- danbooru hotkeys conflict
 	- player appears with wrong dimensions before video starts loading
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
@@ -661,7 +660,8 @@ const onDocumentReady = function(doc) {
 		`document not loaded`);
 
 	doc.defaultView.addEventListener(
-		`keydown`, onKeyDownGlobal, false);
+		/* must use capture to override danbooru's hotkeys: */
+		`keydown`, onKeyDownGlobal, true);
 
 	doc.defaultView.addEventListener(
 		`hashchange`, ev => {applyToDocument(doc);}, false);
@@ -726,6 +726,7 @@ const onKeyDownGlobal = function(ev) {
 			|| trySelectAndClickDisplayedElem(
 				view, `.${galk.svCtrlBar} > .${galk.defocus}`))
 		{
+			ev.stopImmediatePropagation();
 			ev.stopPropagation();};
 
 	} else if (mediaIsFocused(doc)) {
@@ -735,12 +736,14 @@ const onKeyDownGlobal = function(ev) {
 		if (trySelectAndClickDisplayedElem(
 			view, `.${galk.svCtrlBar} > .${galk.next}`))
 		{
+			ev.stopImmediatePropagation();
 			ev.stopPropagation();};
 
 	} else if (ev.key === `ArrowLeft` || ev.key === `Left`) {
 		if (trySelectAndClickDisplayedElem(
 			view, `.${galk.svCtrlBar} > .${galk.prev}`))
 		{
+			ev.stopImmediatePropagation();
 			ev.stopPropagation();};
 	};
 };
