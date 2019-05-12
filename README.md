@@ -52,7 +52,7 @@ Navigation is across the entire result set — not limited to the current page.
 
 When content is focused, hotkeys are disabled and overlay controls are hidden.
 
-### Notes Overlay
+#### Notes Overlay
 
 Notes appear as a set of transparent rectangles over the media.
 Hovering or tapping on them will reveal the caption.
@@ -69,6 +69,14 @@ Key | Action
 `⇨` | Next post
 `esc` | Release focus / close media panel
 
+### History
+
+Viewing any post in the media panel will cause its corresponding page to be
+added/renewed in the browser's history.
+
+For example, viewing post #1803204 on e621 will add
+`https://e621.net/post/show/1803204` to history.
+
 ### Mobile Usage
 
 Usability is good on Android running Firefox 68.0 (with Greasemonkey).
@@ -76,7 +84,7 @@ Other environments are yet to be tested.
 
 Rule34.xxx | Safebooru | e621
 --- | --- | ---
-![Rule34.xxx on Firefox (Android)][fennec r34xxx] | ![Safebooru on Firefox (Android)][fennec safebooru] | ![e621 on Firefox (Android)][fennec e621]
+![][fennec r34xxx] | ![][fennec safebooru] | ![][fennec e621]
 
 ## Installation
 
