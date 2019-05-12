@@ -91,6 +91,15 @@ Key | Action
 \`⇨\` | Next post
 \`esc\` | Release focus / close media panel
 
+### Mobile Usage
+
+Usability is good on Android running Firefox 68.0 (with Greasemonkey).
+Other environments are yet to be tested.
+
+Rule34.xxx | Safebooru | e621
+--- | --- | ---
+![Rule34.xxx on Firefox (Android)][fennec r34xxx] | ![Safebooru on Firefox (Android)][fennec safebooru] | ![e621 on Firefox (Android)][fennec e621]
+
 ## Installation
 
 ### Requirements
@@ -175,17 +184,18 @@ range.
 [media overlay numbered]: https://i.imgur.com/0nxqIGF.png
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
+[fennec r34xxx]: http://b.webpurr.com/nr70.webp
+[fennec safebooru]: http://b.webpurr.com/avB7.webp
+[fennec e621]: http://b.webpurr.com/dVBv.webp
 `;
 
 /*
 
 known issues:
 
-	- danbooru ugoira |> badge broken (test other browsers)
 	- player appears with wrong dimensions before video starts loading
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
-	- pressing escape stops gif playback (test normal browsers)
 	- blacklist may interfere on moebooru
 	- navigating on danbooru does't skip restricted posts
 		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
