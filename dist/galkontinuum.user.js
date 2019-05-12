@@ -168,7 +168,6 @@ range.
 known issues:
 
 	- danbooru ugoira |> badge broken (test other browsers)
-	- danbooru hotkeys conflict
 	- player appears with wrong dimensions before video starts loading
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
@@ -340,7 +339,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.04",
-	"version_name": "2019.05.04 (629969ebe384036fa3ae089d690a9d3493696abb)",
+	"version_name": "2019.05.04 (152cca038e152053a672609433d63295edc677f9)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -694,7 +693,8 @@ const onDocumentReady = function(doc) {
 		`document not loaded`);
 
 	doc.defaultView.addEventListener(
-		`keydown`, onKeyDownGlobal, false);
+		/* must use capture to override danbooru's hotkeys: */
+		`keydown`, onKeyDownGlobal, true);
 
 	doc.defaultView.addEventListener(
 		`hashchange`, ev => {applyToDocument(doc);}, false);
@@ -759,6 +759,7 @@ const onKeyDownGlobal = function(ev) {
 			|| trySelectAndClickDisplayedElem(
 				view, `.${galk.svCtrlBar} > .${galk.defocus}`))
 		{
+			ev.stopImmediatePropagation();
 			ev.stopPropagation();};
 
 	} else if (mediaIsFocused(doc)) {
@@ -768,12 +769,14 @@ const onKeyDownGlobal = function(ev) {
 		if (trySelectAndClickDisplayedElem(
 			view, `.${galk.svCtrlBar} > .${galk.next}`))
 		{
+			ev.stopImmediatePropagation();
 			ev.stopPropagation();};
 
 	} else if (ev.key === `ArrowLeft` || ev.key === `Left`) {
 		if (trySelectAndClickDisplayedElem(
 			view, `.${galk.svCtrlBar} > .${galk.prev}`))
 		{
+			ev.stopImmediatePropagation();
 			ev.stopPropagation();};
 	};
 };
