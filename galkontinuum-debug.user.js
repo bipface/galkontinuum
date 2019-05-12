@@ -28,6 +28,8 @@ browsing of search results on the Booru family of sites.
 It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
 compatible forks such as e621 and Moebooru.
 
+Check [dist/manifest.json][dist manif] for the current list of supported sites.
+
 ## Overview
 
 ### Thumbnail Overlay
@@ -70,6 +72,8 @@ Navigation is across the entire result set — not limited to the current page.
 3. Next post
 4. Release focus
 
+When content is focused, hotkeys are disabled and overlay controls are hidden.
+
 ### Notes Overlay
 
 Notes appear as a set of transparent rectangles over the media.
@@ -83,9 +87,9 @@ Note areas scale proportionally | Caption tooltips stick to bottom edge
 
 Key | Action
 :---: | ---
-`⇦` | Previous post
-`⇨` | Next post
-`esc` | Release focus / close media panel
+\`⇦\` | Previous post
+\`⇨\` | Next post
+\`esc\` | Release focus / close media panel
 
 ## Installation
 
