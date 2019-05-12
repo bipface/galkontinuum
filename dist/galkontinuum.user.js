@@ -315,7 +315,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.04",
-	"version_name": "2019.05.04 (ef0277278ab59d45087400dd46b453bd99260b18)",
+	"version_name": "2019.05.04 (aa2dd156418037be3e1ccefe441bd3ccefa7ec29)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [

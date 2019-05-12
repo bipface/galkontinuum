@@ -37,9 +37,7 @@ navigate through the sequence of results for the current search.
 
 ### Notes Overlay
 
-a | b
---- | ---
-![a](http://a.webpurr.com/EPLM.webp) | ![b](http://a.webpurr.com/EPLM.webp)
+(todo)
 
 ## Installation
 
