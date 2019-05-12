@@ -28,6 +28,8 @@ browsing of search results on the Booru family of sites.
 It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
 compatible forks such as e621 and Moebooru.
 
+Check [dist/manifest.json][dist manif] for the current list of supported sites.
+
 ## Overview
 
 ### Thumbnail Overlay
@@ -43,6 +45,8 @@ leaving the current page.
 
 The media panel appears below the thumbnail list and provides controls to
 navigate through the sequence of results for the current search.
+
+Navigation is across the entire result set — not limited to the current page.
 
 #### Toolbar Controls
 
@@ -68,6 +72,8 @@ navigate through the sequence of results for the current search.
 3. Next post
 4. Release focus
 
+When content is focused, hotkeys are disabled and overlay controls are hidden.
+
 ### Notes Overlay
 
 Notes appear as a set of transparent rectangles over the media.
@@ -76,6 +82,14 @@ Hovering or tapping on them will reveal the caption.
 Note areas scale proportionally | Caption tooltips stick to bottom edge
 --- | ---
 ![Scaling notes][notes scaley anim] | ![Sticky captions][notes sticky captions anim]
+
+### Hotkeys
+
+Key | Action
+:---: | ---
+\`⇦\` | Previous post
+\`⇨\` | Next post
+\`esc\` | Release focus / close media panel
 
 ## Installation
 
@@ -339,7 +353,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.04",
-	"version_name": "2019.05.04 (152cca038e152053a672609433d63295edc677f9)",
+	"version_name": "2019.05.04 (29315e45d2ebd1c1f87fd7d1c9802832e39ae9bf)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
