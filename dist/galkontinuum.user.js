@@ -44,6 +44,8 @@ leaving the current page.
 The media panel appears below the thumbnail list and provides controls to
 navigate through the sequence of results for the current search.
 
+#### Toolbar Controls
+
 ![Media panel][media panel numbered]
 
 1. Toggle notes overlay
@@ -57,9 +59,19 @@ navigate through the sequence of results for the current search.
 9. Unused
 10. Toggle help/about panel
 
+#### Overlay Controls
+
+![Media overlay][media overlay numbered]
+
+1. Previous post
+2. Focus content (only appears over videos)
+3. Next post
+4. Release focus
+
 ### Notes Overlay
 
-(todo)
+Notes appear as a set of transparent rectangles over the media.
+Hovering or tapping on them will reveal the caption.
 
 Note areas scale proportionally | Caption tooltips stick to bottom edge
 --- | ---
@@ -74,7 +86,7 @@ Note areas scale proportionally | Caption tooltips stick to bottom edge
 
 Support for other browsers may be considered if requested.
 
-### Userscript manager
+### Userscript Manager
 
 1. Install a userscript manager such as [Greasemonkey][greasemonkey] or
 [Tampermonkey][tampermonkey].
@@ -146,6 +158,7 @@ range.
 [notes sticky captions anim]: http://a.webpurr.com/EPLM.webp
 [notes scaley anim]: http://b.webpurr.com/MMla.webp
 [media panel numbered]: https://i.imgur.com/MtdHz9U.gif
+[media overlay numbered]: https://i.imgur.com/0nxqIGF.png
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
 `;
@@ -327,7 +340,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.04",
-	"version_name": "2019.05.04 (d9aee42ebdb88a98f4418319575fa5844b30b5d1)",
+	"version_name": "2019.05.04 (629969ebe384036fa3ae089d690a9d3493696abb)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
