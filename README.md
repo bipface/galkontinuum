@@ -69,6 +69,15 @@ Key | Action
 `⇨` | Next post
 `esc` | Release focus / close media panel
 
+### Mobile Usage
+
+Usability is good on Android running Firefox 68.0 (with Greasemonkey).
+Other environments are yet to be tested.
+
+Rule34.xxx | Safebooru | e621
+--- | --- | ---
+![Rule34.xxx on Firefox (Android)][fennec r34xxx] | ![Safebooru on Firefox (Android)][fennec safebooru] | ![e621 on Firefox (Android)][fennec e621]
+
 ## Installation
 
 ### Requirements
@@ -153,3 +162,6 @@ range.
 [media overlay numbered]: https://i.imgur.com/0nxqIGF.png
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
+[fennec r34xxx]: http://b.webpurr.com/nr70.webp
+[fennec safebooru]: http://b.webpurr.com/avB7.webp
+[fennec e621]: http://b.webpurr.com/dVBv.webp
