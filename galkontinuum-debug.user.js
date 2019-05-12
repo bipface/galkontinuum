@@ -44,6 +44,8 @@ leaving the current page.
 The media panel appears below the thumbnail list and provides controls to
 navigate through the sequence of results for the current search.
 
+Navigation is across the entire result set — not limited to the current page.
+
 #### Toolbar Controls
 
 ![Media panel][media panel numbered]
@@ -76,6 +78,14 @@ Hovering or tapping on them will reveal the caption.
 Note areas scale proportionally | Caption tooltips stick to bottom edge
 --- | ---
 ![Scaling notes][notes scaley anim] | ![Sticky captions][notes sticky captions anim]
+
+### Hotkeys
+
+Key | Action
+:---: | ---
+`⇦` | Previous post
+`⇨` | Next post
+`esc` | Release focus / close media panel
 
 ## Installation
 
