@@ -74,7 +74,7 @@ Navigation is across the entire result set — not limited to the current page.
 
 When content is focused, hotkeys are disabled and overlay controls are hidden.
 
-### Notes Overlay
+#### Notes Overlay
 
 Notes appear as a set of transparent rectangles over the media.
 Hovering or tapping on them will reveal the caption.
@@ -91,6 +91,14 @@ Key | Action
 \`⇨\` | Next post
 \`esc\` | Release focus / close media panel
 
+### History
+
+Viewing any post in the media panel will cause its corresponding page to be
+added/renewed in the browser's history.
+
+For example, viewing post #1803204 on e621 will add
+\`https://e621.net/post/show/1803204\` to history.
+
 ### Mobile Usage
 
 Usability is good on Android running Firefox 68.0 (with Greasemonkey).
@@ -98,7 +106,7 @@ Other environments are yet to be tested.
 
 Rule34.xxx | Safebooru | e621
 --- | --- | ---
-![Rule34.xxx on Firefox (Android)][fennec r34xxx] | ![Safebooru on Firefox (Android)][fennec safebooru] | ![e621 on Firefox (Android)][fennec e621]
+![][fennec r34xxx] | ![][fennec safebooru] | ![][fennec e621]
 
 ## Installation
 
@@ -193,9 +201,10 @@ range.
 
 known issues:
 
-	- player appears with wrong dimensions before video starts loading
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
+		doesn't affect swf/video anymore
+	- player appears with wrong dimensions before video starts loading
 	- blacklist may interfere on moebooru
 	- navigating on danbooru does't skip restricted posts
 		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
@@ -1082,15 +1091,20 @@ const bindSlideView = async function(state, doc, view) {
 
 		/* thumbnail image: */
 
+		svEls.thumbElem.hidden = true;
 		svEls.thumbElem.classList.remove(galk.animateToHidden);
 		if (info.thumbnailHref
 			&& info.type !== `swf` /* swf doesn't have thumbnails */)
 		{
+			svEls.stackElem.classList.add(galk.hasThumbnail);
 			updateMediaAttr(svEls.thumbElem, `src`, info.thumbnailHref);
-			svEls.thumbElem.hidden = false;
 		} else {
-			svEls.thumbElem.hidden = true;
-			svEls.thumbElem.removeAttribute(`src`);};
+			svEls.stackElem.classList.remove(galk.hasThumbnail);
+			updateMediaAttr(svEls.thumbElem, `src`,
+				svgDataHref(svgMediaDefaultThumbnail(
+					info.postId, `media type: ${info.type}`)));
+		};
+		svEls.thumbElem.hidden = false;
 
 		if (info.type === `video`) {
 			svEls.imgElem.hidden = true;
@@ -1100,14 +1114,27 @@ const bindSlideView = async function(state, doc, view) {
 			svEls.swfElem.hidden = true;
 			svEls.swfElem.removeAttribute(`data`);
 
+			primeVideoMediaViewingEvent(
+				revoked, state, doc, view, svEls, info);
+
 			if (updateMediaAttr(svEls.vidElem, `src`, info.mediaHref)) {
-				/* release when switching src: */
+				/* release focus when switching src: */
 				toggleMediaIsFocused(doc, false);};
 
-			svEls.vidElem.hidden = false;
+			if (!videoIsLoaded(svEls, info)) {
+				svEls.vidElem.addEventListener(`loadeddata`, function f(ev) {
+					ev.currentTarget.removeEventListener(ev.type, f, false);
+					if (revoked()) {
+						return;};
 
-			// todo
-			//svEls.imgElem.addEventListener(`load`, ev => {
+					log(`media (video) ${ev.type} event triggered`);
+
+					svEls.thumbElem.classList.add(galk.animateToHidden);
+				}, false);
+			} else {
+				svEls.thumbElem.classList.add(galk.animateToHidden);};
+
+			svEls.vidElem.hidden = false;
 
 			bindMediaPlaceholder(revoked, doc, svEls.phldrElem, info);
 
@@ -1121,21 +1148,21 @@ const bindSlideView = async function(state, doc, view) {
 
 			if (svEls.swfElem.getAttribute(`data`) !== info.mediaHref) {
 				svEls.swfElem.hidden = true;
+
+				/* release focus when switching src: */
+				toggleMediaIsFocused(doc, false);
+
 				/* force the <object> to load by re-creating it: */
 				let newEl = svEls.swfElem.cloneNode(true);
 				newEl.data = info.mediaHref;
 				svEls.swfElem.replaceWith(newEl);
 				svEls.swfElem = newEl;
-
-				/* release focus when switching src: */
-				toggleMediaIsFocused(doc, false);
 			};
+
+			primeVideoMediaViewingEvent(
+				revoked, state, doc, view, svEls, info);
+
 			svEls.swfElem.hidden = false;
-
-			/* <object> loading behaviour/events are not well defined or
-			consistent between browsers → just assume it's loaded immediately */
-
-			dispatchMediaViewingEvent(state, view, info.postId);
 
 			bindMediaPlaceholder(revoked, doc, svEls.phldrElem, info);
 
@@ -1462,6 +1489,55 @@ const primeNavigationButtons = async function(
 	};
 };
 
+const primeVideoMediaViewingEvent = function(
+	revoked, state, doc, view, svEls, info)
+{
+	dbg && assert([`swf`, `video`].includes(info.type));
+
+	/* for videos / swfs, the galk.mediaViewing event should only be fired once
+	the media has focus and has loaded at least one frame */
+
+	let isLoaded = () =>
+		(info.type === `swf`
+			? true
+			: svEls.vidElem.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA);
+
+	let dispatched = false;
+	let maybeDispatch = function() {
+		if (dispatched || revoked()) {
+			return true;};
+
+		if (videoIsLoaded(svEls, info) && mediaIsFocused(doc)) {
+			dispatchMediaViewingEvent(state, view, info.postId);
+			dispatched = true;
+			return true;
+		} else {
+			return false;};
+	};
+
+	if (!maybeDispatch()) {
+
+		doc.addEventListener(galk.mediaFocusChange, function f(ev) {
+			if (maybeDispatch()) {
+				ev.currentTarget.removeEventListener(ev.type, f, false);};
+		}, false);
+
+		if (info.type === `video`) {
+			svEls.vidElem.addEventListener(`loadeddata`, function f(ev) {
+				ev.currentTarget.removeEventListener(ev.type, f, false);
+				log(`media (video) ${ev.type} event triggered`);
+				maybeDispatch();
+			}, false);
+		};
+	};
+};
+
+const videoIsLoaded = function(svEls, info) {
+	return info.type === `swf`
+		? true /* no reliable events for <object> */
+		: svEls.vidElem.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+};
+
 const bindThumbnailsList = function(state, doc, scopeElem) {
 	let thumbs = scopeElem.getElementsByClassName(
 		getThumbClass(getDomain(state)));
@@ -1582,6 +1658,7 @@ const thumbnailTitle = function(state, elem) {
 
 const toggleMediaIsFocused = function(doc, x) {
 	doc.documentElement.classList.toggle(galk.mediaIsFocused, x);
+	doc.dispatchEvent(new CustomEvent(galk.mediaFocusChange));
 };
 
 const mediaIsFocused = function(doc) {
@@ -3309,14 +3386,21 @@ const getGlobalStyleRules = function(domain) {
 			z-index : 1;
 		}`,
 
-		`.${galk.svContentStack} > .${galk.mediaThumbnail} {
+		`.${galk.svContentStack} > .${galk.mediaThumbnail}
+		{
+			z-index : 0;
+		}`,
+
+		`.${galk.svContentStack}.${galk.hasThumbnail}
+			> .${galk.mediaThumbnail}
+		{
 			z-index : 0;
 			opacity : 0.5;
 			filter : blur(1.32mm);
 		}`,
 
 		`.${galk.svContentStack} > .${galk.mediaSample},
-		.${galk.svContentStack} > .${galk.mediaThumbnail}
+		.${galk.svContentStack}.${galk.hasThumbnail} > .${galk.mediaThumbnail}
 		{
 			width : auto;
 			height : 100%;
@@ -3794,6 +3878,25 @@ const svgMediaUnavailable = function(postId, message) {
 		</g>
 		<path fill='#fff' d='M150 227l-37 37-17-18 37-36-37-36 17-18 37 37 36-37
 			18 18-37 36 37 36-18 18z'/>
+		<text x='346' y='172' fill='#fff' font-size='67' font-weight='400'
+			font-family='Helvetica,Arial,Tahoma,Liberation Sans,sans-serif'>
+			<tspan x='346' y='172'>id:${postId}</tspan>
+			<tspan x='346' y='255'><![CDATA[${message}]]></tspan>
+		</text>
+	</svg>`;
+};
+
+const svgMediaDefaultThumbnail = function(postId, message) {
+	dbg && assert(isPostId(postId));
+
+	return `<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='380'>
+		<g fill='#fff'>
+			<path d='M29 0C13 0 0 13 0 29v322c0 16 13 29 29 29h242c16 0 29-13
+				29-29V116L189 0zm0 26h149l96 100v225c0 3 0 3-3 3H29c-3 0-3
+				0-3-3V29c0-3 0-3 3-3z'/>
+			<path d='M183 6l-12 7v90c0 8 3 16 8 22 6 6 14 9 23 9h90zm13 39l61
+				63h-55l-4-1c-1-1-2-1-2-4z'/>
+		</g>
 		<text x='346' y='172' fill='#fff' font-size='67' font-weight='400'
 			font-family='Helvetica,Arial,Tahoma,Liberation Sans,sans-serif'>
 			<tspan x='346' y='172'>id:${postId}</tspan>
