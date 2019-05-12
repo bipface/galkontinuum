@@ -39,6 +39,10 @@ navigate through the sequence of results for the current search.
 
 (todo)
 
+Note areas scale proportionally | Caption tooltips stick to bottom edge
+--- | ---
+![Scaling notes][notes scaley anim] | ![Sticky captions][notes sticky captions anim]
+
 ## Installation
 
 ### Requirements
@@ -117,6 +121,8 @@ range.
 [danbooru post 1k notes]: https://danbooru.donmai.us/posts/951241
 
 [thumb overlay anim]: https://i.imgur.com/ueGF43J.gif
+[notes sticky captions anim]: http://a.webpurr.com/EPLM.webp
+[notes scaley anim]: http://b.webpurr.com/MMla.webp
 [media panel numbered]: https://i.imgur.com/MtdHz9U.gif
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
