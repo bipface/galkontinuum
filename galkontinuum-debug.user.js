@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.04
+// @version		2019.05.12
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL	.
 // @downloadURL	.
@@ -3389,14 +3389,19 @@ const getGlobalStyleRules = function(domain) {
 		`.${galk.svContentStack} > .${galk.mediaThumbnail}
 		{
 			z-index : 0;
+			opacity : 0.5;
 		}`,
 
 		`.${galk.svContentStack}.${galk.hasThumbnail}
 			> .${galk.mediaThumbnail}
 		{
-			z-index : 0;
-			opacity : 0.5;
 			filter : blur(1.32mm);
+		}`,
+
+		`.${galk.svContentStack}:not(.${galk.hasThumbnail})
+			> .${galk.mediaThumbnail}
+		{
+			height : calc(var(--${galk.dSvContentMinHeight}) / 2);
 		}`,
 
 		`.${galk.svContentStack} > .${galk.mediaSample},
