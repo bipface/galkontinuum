@@ -61,6 +61,10 @@ navigate through the sequence of results for the current search.
 
 (todo)
 
+Note areas scale proportionally | Caption tooltips stick to bottom edge
+--- | ---
+![Scaling notes][notes scaley anim] | ![Sticky captions][notes sticky captions anim]
+
 ## Installation
 
 ### Requirements
@@ -139,6 +143,8 @@ range.
 [danbooru post 1k notes]: https://danbooru.donmai.us/posts/951241
 
 [thumb overlay anim]: https://i.imgur.com/ueGF43J.gif
+[notes sticky captions anim]: http://a.webpurr.com/EPLM.webp
+[notes scaley anim]: http://b.webpurr.com/MMla.webp
 [media panel numbered]: https://i.imgur.com/MtdHz9U.gif
 [chrome load unpacked]: https://i.imgur.com/RDu11ts.png
 [chrome select folder]: https://i.imgur.com/mvJnMHQ.png
@@ -148,8 +154,8 @@ range.
 
 known issues:
 
-	- probably won't work with danbooru's zip-player videos
-		test: https://danbooru.donmai.us/posts/3471696
+	- danbooru ugoira |> badge broken (test other browsers)
+	- danbooru hotkeys conflict
 	- player appears with wrong dimensions before video starts loading
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
@@ -158,8 +164,10 @@ known issues:
 	- navigating on danbooru does't skip restricted posts
 		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
 	- buttons too small on e621 on mobile
-	- gelbooru: thumbnail overlay is exactly the size of the thumbnail itself:
+	- gelbooru: thumbnail overlay is exactly the size of the thumbnail itself
 		https://i.imgur.com/YJjIzxt.png
+		and not centred:
+		https://gelbooru.com/index.php?page=post&s=list&tags=id%3a4730432
 	- browser history doesn't work well on danbooru since they append ?q=…
 		to the post page hrefs
 	- tryParsePostId() imposes a much stricter syntax than the sites
@@ -187,6 +195,9 @@ planned enhancements:
 		- settings for showing fullsize/thumbnail/sample
 			loading full-size images may not always be desirable
 			(e.g. mobile browsing with small data allowance)
+		- reversed navigation
+		- api requ. page size / prefetch threshold
+		- history
 	- markup in notes?
 
 test cases:
@@ -206,7 +217,8 @@ test cases:
 		- webm / mp4 (?)
 			- controls visible, loop enabled, volume?
 		- swf
-		- zip-player
+		- ugoira:
+			https://danbooru.donmai.us/posts/3471696
 		- sample may or may not exist
 		- tall:
 			https://e621.net/post/index/1/id:1363663
@@ -848,7 +860,7 @@ const ensureSlideView = function(state, doc, parentElem) {
 				<img class='${galk.media}' hidden=''/>
 
 				<video class='${galk.media}' hidden=''
-					controls='' loop='' muted='' preload='metadata'></video>
+					controls='' loop='' muted=''></video>
 
 				<object class='${galk.media}' hidden=''
 					type='application/x-shockwave-flash'
@@ -891,6 +903,34 @@ const ensureSlideView = function(state, doc, parentElem) {
 	return view;
 };
 
+const getSlideViewElements = function(view) {
+	return {
+		stackElem : enforce(getSingleElemByClass(view, galk.svContentStack)),
+		notesOvr : enforce(getSingleElemByClass(view, galk.notesOverlay)),
+
+		imgElem : enforce(querySingleElem(view, `img.${galk.media}`)),
+		vidElem : enforce(querySingleElem(view, `video.${galk.media}`)),
+		swfElem : enforce(querySingleElem(view, `object.${galk.media}`)),
+		sampleElem : enforce(getSingleElemByClass(view, galk.mediaSample)),
+		thumbElem : enforce(getSingleElemByClass(view, galk.mediaThumbnail)),
+		unavElem : enforce(getSingleElemByClass(view, galk.mediaUnavailable)),
+		phldrElem : enforce(getSingleElemByClass(view, galk.mediaPlaceholder)),
+
+		prevBtns : view.querySelectorAll(`a.${galk.prev}`),
+		nextBtns : view.querySelectorAll(`a.${galk.next}`),
+		scaleBtn : enforce(getSingleElemByClass(view, galk.scale)),
+		notesBtn : enforce(querySingleElem(view,
+			`.${galk.svCtrlBar} > .${galk.notes}`)),
+		closeBtn : enforce(querySingleElem(view,
+			`.${galk.svCtrlBar} > .${galk.close}`)),
+		focusBtn : enforce(querySingleElem(view,
+			`.${galk.ctrlOverlay} > .${galk.focus}`)),
+		defocusBtn : enforce(querySingleElem(view,
+			`.${galk.svCtrlBar} > .${galk.defocus}`)),
+		postPageBtn : enforce(querySingleElem(view,
+			`.${galk.svCtrlBar} > .${galk.postPage}`)),};
+};
+
 const bindSlideView = async function(state, doc, view) {
 	enforce(view instanceof HTMLElement, `invalid parameter "view"`);
 
@@ -919,38 +959,16 @@ const bindSlideView = async function(state, doc, view) {
 	doc.documentElement.classList.remove(galk.svLayoutState+`-ready`);
 	doc.documentElement.classList.remove(galk.svLayoutState+`-pending`);
 
-	let notesOvr = enforce(getSingleElemByClass(view, galk.notesOverlay));
+	let svEls = getSlideViewElements(view);
+
 	view.classList.remove(galk.notesVisible);
-	removeAllChildren(notesOvr);
-
-	let stackElem = enforce(getSingleElemByClass(view, galk.svContentStack));
-	let imgElem = enforce(querySingleElem(view, `img.${galk.media}`));
-	let vidElem = enforce(querySingleElem(view, `video.${galk.media}`));
-	let swfElem = enforce(querySingleElem(view, `object.${galk.media}`));
-	let sampleElem = enforce(getSingleElemByClass(view, galk.mediaSample));
-	let thumbElem = enforce(getSingleElemByClass(view, galk.mediaThumbnail));
-	let unavElem = enforce(getSingleElemByClass(view, galk.mediaUnavailable));
-	let scaleBtn = enforce(querySingleElem(view, `.${galk.scale}`));
-	let phldrElem = enforce(getSingleElemByClass(view, galk.mediaPlaceholder));
-
-	let unbindContent = function() {
-		for (let el of [
-			imgElem, vidElem, phldrElem, sampleElem,
-			thumbElem, unavElem, swfElem])
-		{
-			el.hidden = true;
-			el.removeAttribute(`src`);
-			el.removeAttribute(`srcset`);
-			el.removeAttribute(`data`);
-		};
-	};
 
 	if (isPostId(state.currentPostId)) {
 		view.hidden = false;
 	} else {
 		log(`currentPostId not defined; hiding slide-view panel …`);
 		view.hidden = true;
-		unbindContent();
+		unbindSlideViewContent(svEls);
 
 		/* unbind controls: */
 		for (let btn of view.querySelectorAll(`.${galk.svCtrlBar} > a`)) {
@@ -971,17 +989,17 @@ const bindSlideView = async function(state, doc, view) {
 			return;};
 		log(`info for post #${state.currentPostId} is being retrieved`
 			+` asynchronously …`);
-		unbindContent();
+		unbindSlideViewContent(svEls);
 	};
 
-	for (let c of [...stackElem.classList]) {
+	for (let c of [...svEls.stackElem.classList]) {
 		if (c.startsWith(galk.scaleMode)
 			|| c.startsWith(galk.mediaType))
 		{
-			stackElem.classList.remove(c);};
+			svEls.stackElem.classList.remove(c);};
 	};
 
-	scaleBtn.classList.add(galk.disabled);
+	svEls.scaleBtn.classList.add(galk.disabled);
 
 	let invScaleMode = state.scaleMode === `fit` ? `full` : `fit`;
 	let invScaleModeFrag = stateAsFragment(
@@ -990,6 +1008,8 @@ const bindSlideView = async function(state, doc, view) {
 	infoPromise.then((info) => {
 		if (revoked()) {
 			return;};
+
+		dbg && logDebug(`postInfo:`, JSON.stringify(info, null, `\t`));
 
 		doc.documentElement.classList.remove(galk.svLayoutState+`-pending`);
 		doc.documentElement.classList.add(galk.svLayoutState+`-ready`);
@@ -1001,96 +1021,89 @@ const bindSlideView = async function(state, doc, view) {
 		if (!info || !info.mediaHref) {
 			logWarn(`failed to acquire metadata for current post`
 				+` (id:${state.currentPostId})`);
-			unbindContent();
-
-			/* use `srcset` as a workaround for easylist rules: */
-			unavElem.firstElementChild.srcset =
-				svgDataHref(svgMediaUnavailable(state.currentPostId));
-			unavElem.hidden = false;
-
-			maybeScrollIntoView(
-				doc.defaultView, unavElem, `instant`);
-
+			bindSideViewUnavailable(
+				state, doc, svEls, `metadata unavailable`);
 			return;
 		};
 
 		log(`info retrieved for post #${state.currentPostId};`,
-			`media type: ${info.type}`);
-		stackElem.classList.add(galk.mediaType+`-${info.type}`);
+			`media type: "${info.type}"`);
+		svEls.stackElem.classList.add(galk.mediaType+`-${info.type}`);
 
-		unavElem.hidden = true;
-		unavElem.firstElementChild.removeAttribute(`srcset`);
+		svEls.unavElem.hidden = true;
+		svEls.unavElem.firstElementChild.removeAttribute(`srcset`);
 
 		/* scale mode: */
-		stackElem.classList.add(galk.scaleMode+`-${state.scaleMode}`);
-		scaleBtn.classList.remove(galk.scaleMode+`-${state.scaleMode}`);
-		scaleBtn.classList.add(galk.scaleMode+`-${invScaleMode}`);
-		scaleBtn.href = invScaleModeFrag;
-		scaleBtn.classList.remove(galk.disabled);
+		svEls.stackElem.classList.add(galk.scaleMode+`-${state.scaleMode}`);
+		svEls.scaleBtn.classList.remove(galk.scaleMode+`-${state.scaleMode}`);
+		svEls.scaleBtn.classList.add(galk.scaleMode+`-${invScaleMode}`);
+		svEls.scaleBtn.href = invScaleModeFrag;
+		svEls.scaleBtn.classList.remove(galk.disabled);
 
 		/* thumbnail image: */
 
-		thumbElem.classList.remove(galk.animateToHidden);
+		svEls.thumbElem.classList.remove(galk.animateToHidden);
 		if (info.thumbnailHref
 			&& info.type !== `swf` /* swf doesn't have thumbnails */)
 		{
-			updateMediaAttr(thumbElem, `src`, info.thumbnailHref);
-			thumbElem.hidden = false;
+			updateMediaAttr(svEls.thumbElem, `src`, info.thumbnailHref);
+			svEls.thumbElem.hidden = false;
 		} else {
-			thumbElem.hidden = true;
-			thumbElem.removeAttribute(`src`);};
-
-		let placeholderHref =
-			svgDataHref(svgEmptyPlaceholder(info.width, info.height));
+			svEls.thumbElem.hidden = true;
+			svEls.thumbElem.removeAttribute(`src`);};
 
 		if (info.type === `video`) {
-			imgElem.hidden = true;
-			imgElem.removeAttribute(`src`);
-			sampleElem.hidden = true;
-			sampleElem.removeAttribute(`src`);
-			swfElem.hidden = true;
-			swfElem.removeAttribute(`data`);
+			svEls.imgElem.hidden = true;
+			svEls.imgElem.removeAttribute(`src`);
+			svEls.sampleElem.hidden = true;
+			svEls.sampleElem.removeAttribute(`src`);
+			svEls.swfElem.hidden = true;
+			svEls.swfElem.removeAttribute(`data`);
 
-			if (updateMediaAttr(vidElem, `src`, info.mediaHref)) {
+			if (updateMediaAttr(svEls.vidElem, `src`, info.mediaHref)) {
 				/* release when switching src: */
 				toggleMediaIsFocused(doc, false);};
 
-			vidElem.hidden = false;
+			svEls.vidElem.hidden = false;
 
 			// todo
-			//imgElem.addEventListener(`load`, ev => {
+			//svEls.imgElem.addEventListener(`load`, ev => {
+
+			bindMediaPlaceholder(revoked, doc, svEls.phldrElem, info);
 
 		} else if (info.type === `swf`) {
-			imgElem.hidden = true;
-			imgElem.removeAttribute(`src`);
-			sampleElem.hidden = true;
-			sampleElem.removeAttribute(`src`);
-			vidElem.hidden = true;
-			vidElem.removeAttribute(`src`);
+			svEls.imgElem.hidden = true;
+			svEls.imgElem.removeAttribute(`src`);
+			svEls.sampleElem.hidden = true;
+			svEls.sampleElem.removeAttribute(`src`);
+			svEls.vidElem.hidden = true;
+			svEls.vidElem.removeAttribute(`src`);
 
-			if (swfElem.getAttribute(`data`) !== info.mediaHref) {
-				swfElem.hidden = true;
+			if (svEls.swfElem.getAttribute(`data`) !== info.mediaHref) {
+				svEls.swfElem.hidden = true;
 				/* force the <object> to load by re-creating it: */
-				let newEl = swfElem.cloneNode(true);
+				let newEl = svEls.swfElem.cloneNode(true);
 				newEl.data = info.mediaHref;
-				swfElem.replaceWith(newEl);
-				swfElem = newEl;
+				svEls.swfElem.replaceWith(newEl);
+				svEls.swfElem = newEl;
 
 				/* release focus when switching src: */
 				toggleMediaIsFocused(doc, false);
 			};
-			swfElem.hidden = false;
+			svEls.swfElem.hidden = false;
 
 			/* <object> loading behaviour/events are not well defined or
 			consistent between browsers → just assume it's loaded immediately */
 
 			dispatchMediaViewingEvent(state, view, info.postId);
 
+			bindMediaPlaceholder(revoked, doc, svEls.phldrElem, info);
+
 		} else if (info.type === `image`) {
-			vidElem.hidden = true;
-			vidElem.removeAttribute(`src`);
-			swfElem.hidden = true;
-			swfElem.removeAttribute(`data`);
+			svEls.vidElem.hidden = true;
+			svEls.vidElem.removeAttribute(`src`);
+			svEls.swfElem.hidden = true;
+			svEls.swfElem.removeAttribute(`data`);
 
 			/* images can never be focused: */
 			toggleMediaIsFocused(doc, false);
@@ -1098,14 +1111,14 @@ const bindSlideView = async function(state, doc, view) {
 			if (false) {//info.sampleHref) {
 				// disabled for now as it interferes with the alpha-channel
 
-				updateMediaAttr(sampleElem, `src`, info.sampleHref);
-				sampleElem.hidden = false;
+				updateMediaAttr(svEls.sampleElem, `src`, info.sampleHref);
+				svEls.sampleElem.hidden = false;
 			} else {
-				sampleElem.hidden = true;
-				sampleElem.removeAttribute(`src`);};
+				svEls.sampleElem.hidden = true;
+				svEls.sampleElem.removeAttribute(`src`);};
 
 			let viewingEventDispatched = false;
-			imgElem.addEventListener(`loadstart`, function f(ev) {
+			svEls.imgElem.addEventListener(`loadstart`, function f(ev) {
 				ev.currentTarget.removeEventListener(ev.type, f, false);
 				if (revoked()) {
 					return;};
@@ -1116,7 +1129,7 @@ const bindSlideView = async function(state, doc, view) {
 					dispatchMediaViewingEvent(state, view, info.postId);};
 			}, false);
 
-			updateMediaAttr(imgElem, `src`, info.mediaHref);
+			updateMediaAttr(svEls.imgElem, `src`, info.mediaHref);
 
 			/* hide the resampled versions when the full image loads: */
 
@@ -1124,16 +1137,16 @@ const bindSlideView = async function(state, doc, view) {
 				if (!viewingEventDispatched) {
 					dispatchMediaViewingEvent(state, view, info.postId);};
 
-				thumbElem.classList.add(galk.animateToHidden);
-				//sampleElem.hidden = true;
-				//sampleElem.removeAttribute(`src`);
+				svEls.thumbElem.classList.add(galk.animateToHidden);
+				//svEls.sampleElem.hidden = true;
+				//svEls.sampleElem.removeAttribute(`src`);
 			};
 
-			if (imgElem.complete) {
+			if (svEls.imgElem.complete) {
 				log(`media (image) loaded synchronously or src was unchanged`);
 				onLoaded();
 			} else {
-				imgElem.addEventListener(`load`, function f(ev) {
+				svEls.imgElem.addEventListener(`load`, function f(ev) {
 					ev.currentTarget.removeEventListener(ev.type, f, false);
 					if (!revoked()) {
 						log(`media (image) ${ev.type} event triggered`);
@@ -1141,41 +1154,14 @@ const bindSlideView = async function(state, doc, view) {
 				}, false);
 			};
 
-			imgElem.hidden = false;
+			svEls.imgElem.hidden = false;
+
+			bindMediaPlaceholder(revoked, doc, svEls.phldrElem, info);
+
 		} else {
 			logWarn(`unrecognised media type "${info.type}"`);
+			bindSideViewUnavailable(state, doc, svEls, `unrecognised filetype`);
 		};
-
-		/* placeholder image: */
-
-		/* use `srcset` as a workaround for easylist element hiding rules: */
-		updateMediaAttr(phldrElem, `srcset`, placeholderHref);
-
-		{/* scroll to the placeholder when it loads: */
-			let onLoaded = function() {
-				maybeScrollIntoView(
-					doc.defaultView, phldrElem, `instant`);
-			};
-
-			if (phldrElem.complete && phldrElem.getBoundingClientRect().width) {
-				/* sometimes `complete` is true yet bounding rect is empty */
-				log(`placeholder loaded synchronously or src was unchanged`);
-				onLoaded();
-			} else {
-				let triggered = false;
-				let f = ev => {
-					ev.currentTarget.removeEventListener(ev.type, f, false);
-					if (!revoked() && !triggered) {
-						log(`placeholder ${ev.type} event triggered`);
-						onLoaded();};
-					triggered = true;
-				};
-				phldrElem.addEventListener(`load`, f, false);
-				phldrElem.addEventListener(`loadedmetadata`, f, false);
-			};
-		};
-
-		phldrElem.hidden = false;
 	});
 
 	/* notes overlay and toggle-notes button: */
@@ -1183,69 +1169,80 @@ const bindSlideView = async function(state, doc, view) {
 		if (revoked()) {
 			return;};
 
-		let notesBtn = enforce(querySingleElem(view,
-			`.${galk.svCtrlBar} > .${galk.notes}`));
-
 		let postInfo = await infoPromise;
-		if (!postInfo || !notes || !notes.length) {
-			notesBtn.classList.add(galk.disabled);
+		if (postInfo && notes && notes.length) {
+			bindNotesOverlay(state, doc, svEls.notesOvr, postInfo, notes);
+			view.classList.add(galk.notesVisible);
+
+			svEls.notesBtn.addEventListener(`click`, function f(ev) {
+				if (revoked()) {
+					ev.currentTarget.removeEventListener(ev.type, f, false);
+				} else {
+					view.classList.toggle(galk.notesVisible);};
+			}, false);
+
+			svEls.notesBtn.classList.remove(galk.disabled);
+		} else {
+			svEls.notesBtn.classList.add(galk.disabled);
 			view.classList.remove(galk.notesVisible);
-			return;};
-
-		bindNotesOverlay(state, doc, notesOvr, postInfo, notes);
-		view.classList.add(galk.notesVisible);
-
-		notesBtn.addEventListener(`click`, function f(ev) {
-			if (revoked()) {
-				ev.currentTarget.removeEventListener(ev.type, f, false);
-			} else {
-				view.classList.toggle(galk.notesVisible);
-				ev.preventDefault();
-				ev.stopPropagation();};
-		}, false);
-
-		notesBtn.classList.remove(galk.disabled);
+			removeAllChildren(svEls.notesOvr);
+		};
 	});
 
 	/* click image to toggle scale-mode: */
-	imgElem.addEventListener(`click`, function f(ev) {
+	svEls.imgElem.addEventListener(`click`, function f(ev) {
 		ev.currentTarget.removeEventListener(ev.type, f, false);
 		if (!revoked()) {
 			doc.location.hash = invScaleModeFrag;};
 	}, false);
 
 	/* post page button: */
-	let postPageBtn = enforce(querySingleElem(view,
-		`.${galk.svCtrlBar} > .${galk.postPage}`));
-	postPageBtn.title = `#${state.currentPostId}`;
-	postPageBtn.href = postPageUrl(state, state.currentPostId).href;
+	svEls.postPageBtn.title = `#${state.currentPostId}`;
+	svEls.postPageBtn.href = postPageUrl(state, state.currentPostId).href;
 
 	/* close button: */
-	let closeBtn = enforce(querySingleElem(view,
-		`.${galk.svCtrlBar} > .${galk.close}`));
-	closeBtn.href = stateAsFragment(
+	svEls.closeBtn.href = stateAsFragment(
 		{...state, currentPostId : undefined}, currentHref);
-
 	/* when closing, return to the corresponding thumbnail: */
-	closeBtn.addEventListener(`click`, function f(ev) {
+	svEls.closeBtn.addEventListener(`click`, function f(ev) {
 		ev.currentTarget.removeEventListener(ev.type, f, false);
 		if (!revoked()) {
 			onCloseSlideView(state, doc);};
 	}, false);
 
 	/* focus button: */
-	enforce(querySingleElem(view, `.${galk.ctrlOverlay} > .${galk.focus}`))
-		.addEventListener(`click`, onFocusMediaBtnClick, false);
-
+	svEls.focusBtn.addEventListener(`click`, onFocusMediaBtnClick, false);
 	/* release-focus button: */
-	enforce(querySingleElem(view, `.${galk.svCtrlBar} > .${galk.defocus}`))
-		.addEventListener(`click`, onDefocusMediaBtnClick, false);
+	svEls.defocusBtn.addEventListener(`click`, onDefocusMediaBtnClick, false);
 
 	/* prev and next buttons: */
-	bindNavigationButtons(revoked, state, doc,
-		view.querySelectorAll(`a.${galk.prev}`), -1);
-	bindNavigationButtons(revoked, state, doc,
-		view.querySelectorAll(`a.${galk.next}`), 1);
+	bindNavigationButtons(revoked, state, doc, svEls.prevBtns, -1);
+	bindNavigationButtons(revoked, state, doc, svEls.nextBtns, 1);
+};
+
+const bindSideViewUnavailable = function(state, doc, svEls, message) {
+	unbindSlideViewContent(svEls);
+
+	/* use `srcset` as a workaround for easylist rules: */
+	svEls.unavElem.firstElementChild.srcset =
+		svgDataHref(svgMediaUnavailable(
+			state.currentPostId, message));
+	svEls.unavElem.hidden = false;
+
+	maybeScrollIntoView(
+		doc.defaultView, svEls.unavElem, `instant`);
+};
+
+const unbindSlideViewContent = function(svEls) {
+	for (let el of [
+		svEls.imgElem, svEls.vidElem, svEls.phldrElem, svEls.sampleElem,
+		svEls.thumbElem, svEls.unavElem, svEls.swfElem])
+	{
+		el.hidden = true;
+		el.removeAttribute(`src`);
+		el.removeAttribute(`srcset`);
+		el.removeAttribute(`data`);
+	};
 };
 
 const destroySlideView = function(state, view) {
@@ -1284,6 +1281,32 @@ const onFocusMediaBtnClick = function(ev) {
 const onDefocusMediaBtnClick = function(ev) {
 	toggleMediaIsFocused(
 		ev.target.ownerDocument, false);
+};
+
+const bindMediaPlaceholder = function(revoked, doc, phldrElem, postInfo) {
+	phldrElem.hidden = true;
+	phldrElem.removeAttribute(`srcset`);
+
+	/* scrollIntoView when it loads: */
+
+	let triggered = false;
+	let f = ev => {
+		ev.currentTarget.removeEventListener(ev.type, f, false);
+		if (!revoked() && !triggered) {
+			log(`placeholder ${ev.type} event triggered`);
+			maybeScrollIntoView(
+				doc.defaultView, phldrElem, `instant`);
+		};
+		triggered = true;
+	};
+	phldrElem.addEventListener(`load`, f, false);
+	phldrElem.addEventListener(`loadedmetadata`, f, false);
+
+	/* use `srcset` as a workaround for easylist element hiding rules: */
+	phldrElem.srcset = svgDataHref(
+		svgEmptyPlaceholder(postInfo.width, postInfo.height));
+
+	phldrElem.hidden = false;
 };
 
 const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
@@ -2263,9 +2286,16 @@ const postInfoFromDanbooruApiPost = function(state, post) {
 	} else {
 		md5 = undefined;};
 
+	let type = getMediaType(mediaHref);
+	if (type === `ugoira` && getMediaType(sampleHref) === `video`) {
+		/* danbooru provides webms as samples: */
+		type = `video`;
+		mediaHref = sampleHref;
+	};
+
 	return {
 		postId : post.id,
-		type : getMediaType(mediaHref),
+		type,
 		mediaHref,
 		sampleHref,
 		thumbnailHref,
@@ -2406,6 +2436,8 @@ const getMediaType = function(href) {
 			type = `video`;
 		} else if (p.endsWith(`.swf`)) {
 			type = `swf`;
+		} else if (p.endsWith(`.zip`)) {
+			type = `ugoira`;
 		};
 	};
 
@@ -2534,7 +2566,11 @@ const requestPostInfoUrl = function(state, postId) {
 
 	switch (domain.kind) {
 		case `danbooru` :
-			url.pathname = `/post/index.json`;
+			if (domain.subkind === `danbooru`) {
+				/* provides more fields than index.json: */
+				url.pathname = `/posts.json`;
+			} else {
+				url.pathname = `/post/index.json`;};
 			url.searchParams.set(`only`, danbooruApiPostFieldsSelector);
 			url.searchParams.set(`limit`, `1`);
 			url.searchParams.set(`tags`, `id:${postId}`);
@@ -2610,7 +2646,12 @@ const requestNavigatePostInfoUrl = function(
 
 	switch (domain.kind) {
 		case `danbooru` : {
-			url.pathname = `/post/index.json`;
+			if (domain.subkind === `danbooru`) {
+				/* provides more fields than index.json: */
+				url.pathname = `/posts.json`;
+			} else {
+				url.pathname = `/post/index.json`;};
+
 			url.searchParams.set(`only`, danbooruApiPostFieldsSelector);
 			url.searchParams.set(`limit`, `${navigatePostInfoRequPageLen}`);
 
@@ -2906,10 +2947,11 @@ const maybeScrollIntoView = function(
 		|| rect.top < 0
 		|| rect.bottom > viewport.innerHeight)
 	{
-		log(`scrolling to element <${el.tagName}> …`);
+		dbg && logDebug(`scrolling to element <${el.tagName}> …`);
 		el.scrollIntoView({behavior});
 	} else {
-		log(`element <${el.tagName}> already within viewport; not scrolling`,
+		dbg && logDebug(
+			`element <${el.tagName}> already within viewport; not scrolling`,
 			`(w: ${rect.width}, h: ${rect.height})`);
 	};
 };
@@ -3699,7 +3741,7 @@ const svgEmptyPlaceholder = function(w, h) {
 		+` width='${w|0}' height='${h|0}'><path/></svg>`;
 };
 
-const svgMediaUnavailable = function(postId) {
+const svgMediaUnavailable = function(postId, message) {
 	dbg && assert(isPostId(postId));
 
 	return `<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='380'>
@@ -3715,7 +3757,7 @@ const svgMediaUnavailable = function(postId) {
 		<text x='346' y='172' fill='#fff' font-size='67' font-weight='400'
 			font-family='Helvetica,Arial,Tahoma,Liberation Sans,sans-serif'>
 			<tspan x='346' y='172'>id:${postId}</tspan>
-			<tspan x='346' y='255'>metadata unavailable</tspan>
+			<tspan x='346' y='255'><![CDATA[${message}]]></tspan>
 		</text>
 	</svg>`;
 };
