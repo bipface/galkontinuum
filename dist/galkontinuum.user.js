@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.12
+// @version		2019.05.13
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL https://github.com/bipface/galkontinuum/tree/master/#readme
 // @downloadURL https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
@@ -201,6 +201,8 @@ range.
 
 known issues:
 
+	- bug in moebooru api yields deleted results if any id:<n / id:>n term
+		is specified; no `deleted:false` to override it with
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
 		doesn't affect swf/video anymore
@@ -371,8 +373,8 @@ const manifest = {
 	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
-	"version": "2019.05.12",
-	"version_name": "2019.05.12 (3b20e4f811744ea1afc474e2b2b1eef3fe62f9a3)",
+	"version": "2019.05.13",
+	"version_name": "2019.05.13 (d203f021e198f4f638387454ac71c1bb32a04923)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -1262,12 +1264,15 @@ const bindSlideView = async function(state, doc, view) {
 			logWarn(`unrecognised media type "${info.type}"`);
 			bindSideViewUnavailable(state, doc, svEls, `unrecognised filetype`);
 		};
-	});
+	}).catch(logError);
 
 	/* notes overlay and toggle-notes button: */
 	notesPromise.then(async (notes) => {
 		if (revoked()) {
 			return;};
+
+		log(`notes retrieved for post #${state.currentPostId}`,
+			`(${(notes || []).length} notes)`);
 
 		let postInfo = await infoPromise;
 		if (postInfo && notes && notes.length) {
@@ -1287,7 +1292,7 @@ const bindSlideView = async function(state, doc, view) {
 			view.classList.remove(galk.notesVisible);
 			removeAllChildren(svEls.notesOvr);
 		};
-	});
+	}).catch(logError);
 
 	/* click image to toggle scale-mode: */
 	svEls.imgElem.addEventListener(`click`, function f(ev) {
@@ -2110,7 +2115,9 @@ const tryGetPostNotes = async function(state, postId) {
 	let notes = notesCache.get(postId);
 	if (notes !== undefined) {
 		dbg && assert(Array.isArray(notes));
+		log(`notes cache hit; postId: ${postId}`);
 		return notes;};
+	log(`notes cache miss; postId: ${postId}`);
 
 	let requUrl = requestPostNotesUrl(state, postId);
 	let xhr = await tryApiRequ(state, requUrl);
@@ -2150,6 +2157,7 @@ const tryGetPostNotes = async function(state, postId) {
 		reportInvalidResponse(requUrl.href, xhr);
 		return null;};
 
+	log(`caching ${notes.length} notes; postId: ${postId}`);
 	notesCache.set(postId, notes);
 
 	return notes;
@@ -2517,7 +2525,7 @@ const postInfoFromGelbooruApiPostElem = function(state, post) {
 };
 
 const danbooruApiNoteFieldsSelector = [
-	`body`, `x`, `y`, `width`, `height`, `is_active`,]
+	`post_id`, `body`, `x`, `y`, `width`, `height`, `is_active`,]
 	.join(`,`);
 
 const postNotesFromDanbooruApiNotesList = function(state, postId, rawNotes) {
@@ -2599,7 +2607,7 @@ const reportInvalidResponse = function(href, xhr) {
 	dbg && assert(typeof xhr === `object`);
 
 	logError(`api request "${href}" returned invalid response:`,
-		xhr === null ? `(null)` : xhr.responseText);
+		xhr === null ? `(null)` : xhr.response);
 };
 
 /* --- urls --- */
@@ -2925,11 +2933,14 @@ const httpGet = function(url, responseType) {
 		let onFailure = function() {
 			return reject(new Error(
 				`GET request "${url.href}" failed with status `
-				+`"${this.statusText}"`));
+					+`"${this.statusText}"`));
 		};
 
 		let onSuccess = function() {
 			if (this.status === 200) {
+				dbg && logDebug(
+					`GET request "${url.href}" succeeded with status `
+						+`"${this.statusText}"`);
 				return resolve(this);
 			} else {
 				return onFailure.call(this);};
@@ -2943,6 +2954,7 @@ const httpGet = function(url, responseType) {
 			onerror : onFailure,
 			ontimeout : onFailure,});
 
+		dbg && logDebug(`opening GET request "${url.href}"`);
 		xhr.open(`GET`, url.href);
 		xhr.send();
 	});
@@ -3751,6 +3763,8 @@ const getGlobalStyleRules = function(domain) {
 		`.${galk.thumbOverlay} {
 			display : flex;
 			flex-direction : column;
+			justify-content : center;
+			align-items : stretch;
 			position : absolute;
 			z-index : 32767; /* to ensure it covers type-badge on e621 */
 			top : 0;
@@ -3761,15 +3775,20 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.thumbOverlay} > a {
 			flex-grow : 1;
-			display : flex !important; /* important because danbooru */
+			margin : 0 !important; /* !important to override danbooru's rules */
+			display : flex !important; /* !imp. to override danbooru's rules */
 			align-items : center;
 			justify-content : center;
+			overflow : hidden;
 			opacity : 0;
 		}`,
 
 		`.${galk.thumbOverlay} > a > .${galk.btnIcon} {
 			width : var(--${galk.dThumbOvrBtnSize});
 			height : var(--${galk.dThumbOvrBtnSize});
+			background-size : contain;
+			background-repeat : no-repeat;
+			background-position : center;
 		}`,
 
 		`.${galk.thumbOverlay} > a:hover,
