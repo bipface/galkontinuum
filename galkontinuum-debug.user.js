@@ -3070,7 +3070,6 @@ const nodesAreHierarchicallyCoaxial = function(a, b) {
 const maybeScrollIntoView = function(
 	viewport /* window */, el, behavior = `smooth`)
 {
-	return;
 	if (!(el instanceof Element)) {
 		return;};
 
