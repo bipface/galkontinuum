@@ -380,7 +380,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.14",
-	"version_name": "2019.05.14 (98d683a106708cdaf328d0c5253a625f3171e96b)",
+	"version_name": "2019.05.14 (705ebefc39a3fd5a22d19460c823489be747ff2b)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -3103,7 +3103,6 @@ const nodesAreHierarchicallyCoaxial = function(a, b) {
 const maybeScrollIntoView = function(
 	viewport /* window */, el, behavior = `smooth`)
 {
-	return;
 	if (!(el instanceof Element)) {
 		return;};
 
