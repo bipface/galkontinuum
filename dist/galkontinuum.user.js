@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.13
+// @version		2019.05.14
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL https://github.com/bipface/galkontinuum/tree/master/#readme
 // @downloadURL https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
@@ -24,6 +24,8 @@ const getReadmeMarkdown = (manif, {downloadHref}) =>
 `# Galkontinuum
 Galkontinuum is a [userscript][wiki userscript] which enables slideshow-style
 browsing of search results on the Booru family of sites.
+
+![Navigating results across pages][nav acrosspage anim]
 
 It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
 compatible forks such as e621 and Moebooru.
@@ -90,6 +92,7 @@ Key | Action
 \`⇦\` | Previous post
 \`⇨\` | Next post
 \`esc\` | Release focus / close media panel
+\`num0\` | Toggle scale mode (fit-to-screen / full-size)
 
 ### History
 
@@ -185,6 +188,7 @@ range.
 [danbooru wiki censored tags]: https://danbooru.donmai.us/wiki_pages/84990
 [danbooru post 1k notes]: https://danbooru.donmai.us/posts/951241
 
+[nav acrosspage anim]: http://b.webpurr.com/x2EK.webp
 [thumb overlay anim]: https://i.imgur.com/ueGF43J.gif
 [notes sticky captions anim]: http://a.webpurr.com/EPLM.webp
 [notes scaley anim]: http://b.webpurr.com/MMla.webp
@@ -201,6 +205,8 @@ range.
 
 known issues:
 
+	- on mobile, < > overlays stay visible
+	- full-size cropped on danbooru mobile layout
 	- bug in moebooru api yields deleted results if any id:<n / id:>n term
 		is specified; no `deleted:false` to override it with
 	- thumbnail may remain visible after the first frame of an animation is
@@ -231,10 +237,10 @@ known issues:
 
 planned enhancements:
 
+	- flash the < > overlay when navigating with keyboard
 	- rule34: use sin's api for getting post info
 	- more hotkeys
 	- help/about page
-		- reload button
 	- property sheet
 	- navigation on current page without API requests?
 	- post pages: add a link back to the gallery page on which it appears (?)
@@ -259,8 +265,8 @@ test cases:
 		- chrome current, tampermonkey
 
 	media:
-		- jpeg / png (static) / gif (static)
-		- png (animated) / gif (animated)
+		- jpeg / png (static) / gif (static) / webp?
+		- png (animated) / gif (animated) / webp?
 		- webm / mp4 (?)
 			- controls visible, loop enabled, volume?
 		- swf
@@ -373,8 +379,8 @@ const manifest = {
 	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
-	"version": "2019.05.13",
-	"version_name": "2019.05.13 (d203f021e198f4f638387454ac71c1bb32a04923)",
+	"version": "2019.05.14",
+	"version_name": "2019.05.14 (98d683a106708cdaf328d0c5253a625f3171e96b)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -734,9 +740,6 @@ const onDocumentReady = function(doc) {
 	doc.defaultView.addEventListener(
 		`hashchange`, ev => {applyToDocument(doc);}, false);
 
-	doc.defaultView.addEventListener(
-		galk.reload, ev => {applyToDocument(doc);}, false);
-
 	applyToDocument(doc);
 };
 
@@ -765,7 +768,7 @@ const hostnameDomainTbl = {
 };
 
 const globalBoundKeyNames = new Set([
-	`Escape`, `ArrowRight`, `Right`, `ArrowLeft`, `Left`,]);
+	`Escape`, `0`, `ArrowRight`, `Right`, `ArrowLeft`, `Left`,]);
 
 const onKeyDownGlobal = function(ev) {
 	/* hotkeys: */
@@ -773,9 +776,6 @@ const onKeyDownGlobal = function(ev) {
 	if (!globalBoundKeyNames.has(ev.key)
 		|| !(ev.target instanceof Element))
 	{
-		return;};
-
-	if (!(ev.target instanceof Element)) {
 		return;};
 
 	let doc = ev.target.ownerDocument;
@@ -810,6 +810,15 @@ const onKeyDownGlobal = function(ev) {
 	} else if (ev.key === `ArrowLeft` || ev.key === `Left`) {
 		if (trySelectAndClickDisplayedElem(
 			view, `.${galk.svCtrlBar} > .${galk.prev}`))
+		{
+			ev.stopImmediatePropagation();
+			ev.stopPropagation();};
+
+	} else if (ev.key === `0`
+		&& ev.location === KeyboardEvent.DOM_KEY_LOCATION_NUMPAD)
+	{
+		if (trySelectAndClickDisplayedElem(
+			view, `.${galk.svCtrlBar} > .${galk.scale}`))
 		{
 			ev.stopImmediatePropagation();
 			ev.stopPropagation();};
@@ -1347,6 +1356,10 @@ const unbindSlideViewContent = function(svEls) {
 		el.removeAttribute(`src`);
 		el.removeAttribute(`srcset`);
 		el.removeAttribute(`data`);
+
+		if (el instanceof HTMLMediaElement) {
+			/* sometimes <video> elements keep playing despite having no src */
+			el.pause();};
 	};
 };
 
@@ -1354,15 +1367,6 @@ const destroySlideView = function(state, view) {
 	dbg && assert(view instanceof HTMLElement);
 	view.dispatchEvent(new CustomEvent(galk.revoke));
 	view.remove();
-};
-
-const onReloadSlideView = function(state, doc, view) {
-	/* clear caches and remove controls: */
-	notesCache.clear();
-	searchResultsCache = null;
-	destroySlideView(state, view);
-
-	doc.defaultView.dispatchEvent(new CustomEvent(galk.reload));
 };
 
 const onCloseSlideView = function(state, doc) {
@@ -3099,6 +3103,7 @@ const nodesAreHierarchicallyCoaxial = function(a, b) {
 const maybeScrollIntoView = function(
 	viewport /* window */, el, behavior = `smooth`)
 {
+	return;
 	if (!(el instanceof Element)) {
 		return;};
 

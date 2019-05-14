@@ -3,6 +3,8 @@
 Galkontinuum is a [userscript][wiki userscript] which enables slideshow-style
 browsing of search results on the Booru family of sites.
 
+![Navigating results across pages][nav acrosspage anim]
+
 It targets galleries running Gelbooru 0.2.x, Danbooru 2.x, Danbooru 1.x and
 compatible forks such as e621 and Moebooru.
 
@@ -68,6 +70,7 @@ Key | Action
 `⇦` | Previous post
 `⇨` | Next post
 `esc` | Release focus / close media panel
+`num0` | Toggle scale mode (fit-to-screen / full-size)
 
 ### History
 
@@ -163,6 +166,7 @@ range.
 [danbooru wiki censored tags]: https://danbooru.donmai.us/wiki_pages/84990
 [danbooru post 1k notes]: https://danbooru.donmai.us/posts/951241
 
+[nav acrosspage anim]: http://b.webpurr.com/x2EK.webp
 [thumb overlay anim]: https://i.imgur.com/ueGF43J.gif
 [notes sticky captions anim]: http://a.webpurr.com/EPLM.webp
 [notes scaley anim]: http://b.webpurr.com/MMla.webp
