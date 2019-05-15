@@ -3700,7 +3700,8 @@ const getGlobalStyleRules = function(domain) {
 			visibility : visible;
 		}`,
 
-		matchMedia(`(hover : none)`).matches
+		(matchMedia(`(hover : none)`).matches
+			|| matchMedia(`(-moz-touch-enabled)`).matches)
 			? `.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:active,
 				.${galk.ctrlOverlay} > .${galk.focus}:active > .${galk.btnIcon}
 				{
