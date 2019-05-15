@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.14
+// @version		2019.05.15
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL	.
 // @downloadURL	.
