@@ -380,7 +380,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.14",
-	"version_name": "2019.05.14 (00e9a6dde22c930f20b3ed9b555289ae787fb08b)",
+	"version_name": "2019.05.14 (4d15d12d3055b78157149007b9b1337436e279e0)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -3733,7 +3733,8 @@ const getGlobalStyleRules = function(domain) {
 			visibility : visible;
 		}`,
 
-		matchMedia(`(hover : none)`).matches
+		(matchMedia(`(hover : none)`).matches
+			|| matchMedia(`(-moz-touch-enabled)`).matches)
 			? `.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:active,
 				.${galk.ctrlOverlay} > .${galk.focus}:active > .${galk.btnIcon}
 				{
