@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.14
+// @version		2019.05.15
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL https://github.com/bipface/galkontinuum/tree/master/#readme
 // @downloadURL https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
@@ -379,8 +379,8 @@ const manifest = {
 	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
-	"version": "2019.05.14",
-	"version_name": "2019.05.14 (4d15d12d3055b78157149007b9b1337436e279e0)",
+	"version": "2019.05.15",
+	"version_name": "2019.05.15 (f7d5f3df9fe48caf3defda886cb6ecf1e40b3056)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
