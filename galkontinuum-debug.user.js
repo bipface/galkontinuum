@@ -1330,12 +1330,6 @@ const unbindSlideViewContent = function(svEls) {
 	};
 };
 
-const destroySlideView = function(state, view) {
-	dbg && assert(view instanceof HTMLElement);
-	view.dispatchEvent(new CustomEvent(galk.revoke));
-	view.remove();
-};
-
 const onCloseSlideView = function(state, doc) {
 	maybeScrollIntoView(doc.defaultView,
 		doc.getElementById(`post_${state.currentPostId}`) /* danbooru */
@@ -1450,10 +1444,19 @@ const bindNavigationButtons = function(
 		} else if (!ev.currentTarget.classList.contains(galk.ready)
 			&& !ev.currentTarget.classList.contains(galk.pending))
 		{
+			/* clicking a non-ready nav button attempts to prime it again: */
 			primeNavigationButtons(
 				revoked, state, doc, [ev.currentTarget], direction);
 			ev.preventDefault();
 			ev.stopPropagation();
+		} else {
+			for (let btn of btns) {
+				btn.classList.remove(galk.animatePulseOpacity);};
+			/* reflow is required to restart the animation: */
+			setTimeout(() => {
+				if (!revoked()) {
+					for (let btn of btns) {
+						btn.classList.add(galk.animatePulseOpacity);};};});
 		};
 	};
 
@@ -3689,15 +3692,25 @@ const getGlobalStyleRules = function(domain) {
 			opacity : 0.2;
 		}`,
 
+		`.${galk.ctrlOverlay} > .${galk.nav} {
+			--${galk.pulseOpacity} : var(--${galk.rSvInactOpacity});
+		}`,
+
 		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready} {
 			visibility : visible;
 		}`,
 
-		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:hover,
-		.${galk.ctrlOverlay} > .${galk.focus}:hover > .${galk.btnIcon}
-		{
-			opacity : var(--${galk.rSvInactOpacity});
-		}`,
+		matchMedia(`(hover : none)`).matches
+			? `.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:active,
+				.${galk.ctrlOverlay} > .${galk.focus}:active > .${galk.btnIcon}
+				{
+					opacity : var(--${galk.rSvInactOpacity});
+				}`
+			: `.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready}:hover,
+				.${galk.ctrlOverlay} > .${galk.focus}:hover > .${galk.btnIcon}
+				{
+					opacity : var(--${galk.rSvInactOpacity});
+				}`,
 
 		`.${galk.focus} > .${galk.btnIcon} {
 			background-image : url(${svgHref(svgCircleFocus)});
@@ -3836,6 +3849,19 @@ const getGlobalStyleRules = function(domain) {
 				visibility : hidden;
 				opacity : 0;
 			}
+		}`,
+
+		`.${galk.animatePulseOpacity} {
+			animation-name : ${galk.pulseOpacity};
+			animation-iteration-count : 1;
+			animation-duration : 0.2s;
+			animation-timing-function : linear;
+			animation-fill-mode : forwards;
+		}`,
+
+		`@keyframes ${galk.pulseOpacity} {
+			from {opacity : var(--${galk.pulseOpacity});}
+			to {}
 		}`,
 
 		`@keyframes ${galk.rotate} {
