@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.15
+// @version		2019.05.19
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL	.
 // @downloadURL	.
@@ -205,13 +205,12 @@ range.
 
 known issues:
 
-	- on mobile, < > overlays stay visible
 	- full-size cropped on danbooru mobile layout
 	- bug in moebooru api yields deleted results if any id:<n / id:>n term
 		is specified; no `deleted:false` to override it with
 	- thumbnail may remain visible after the first frame of an animation is
 		fully rendered (noticible with alpha-transparent gifs)
-		doesn't affect swf/video anymore
+		doesn't affect swf/video
 	- player appears with wrong dimensions before video starts loading
 	- blacklist may interfere on moebooru
 	- navigating on danbooru does't skip restricted posts
@@ -237,18 +236,17 @@ known issues:
 
 planned enhancements:
 
-	- flash the < > overlay when navigating with keyboard
-	- rule34: use sin's api for getting post info
+	- rule34: use main-DB api for getting post info
 	- more hotkeys
 	- help/about page
-	- property sheet
+	- artist tags on footer
 	- navigation on current page without API requests?
 	- post pages: add a link back to the gallery page on which it appears (?)
 	- options page
 		- settings for showing fullsize/thumbnail/sample
 			loading full-size images may not always be desirable
 			(e.g. mobile browsing with small data allowance)
-		- reversed navigation
+		- reversed navigation ?
 		- api requ. page size / prefetch threshold
 		- history
 	- markup in notes?
@@ -940,24 +938,35 @@ const ensureSlideView = function(state, doc, parentElem) {
 		</section>
 
 		<footer class='${galk.svCtrlBar}'>
-			<a title='' class='${galk.disabled}'>
+			<a class='${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Attributes' class='${galk.meta} ${galk.disabled}'>
+			<a class='${galk.disabled}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
 			<a class='${galk.postPage}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a title='Options' class='${galk.disabled}'>
-				<figure class='${galk.btnIcon}'></figure></a>
+			<a class='${galk.mediaAttr} ${galk.disabled}'>
+				<span class='${galk.btnLabel}'>
+					<span>
+						<span class='${galk.mediaFileExt}'></span>
+						<span class='${galk.mediaDims}'></span>
+					</span>
+					<span>
+						<span class='${galk.mediaFileSize}'></span>
+						<span class='${galk.mediaStatus}'></span>
+					</span>
+				</span>
+			</a>
 
 			<a title='Help' class='${galk.help}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 		</footer>`);
 
-	/* note: avoid using <div> due to global !important styles in safebooru's
-	mobile layout stylesheet */
+	/* note: avoid using
+		<div> <p> <h1…h6> <ul> <li> <dd> <dt>
+	due to global !important styles in safebooru's mobile layout stylesheet */
 
 	parentElem.append(view);
 	return view;
@@ -988,7 +997,17 @@ const getSlideViewElements = function(view) {
 		defocusBtn : enforce(querySingleElem(view,
 			`.${galk.svCtrlBar} > .${galk.defocus}`)),
 		postPageBtn : enforce(querySingleElem(view,
-			`.${galk.svCtrlBar} > .${galk.postPage}`)),};
+			`.${galk.svCtrlBar} > .${galk.postPage}`)),
+
+		mediaAttrBtn : enforce(querySingleElem(view,
+			`.${galk.svCtrlBar} > .${galk.mediaAttr}`)),
+		mediaAttr : {
+			fileExt : enforce(getSingleElemByClass(view, galk.mediaFileExt)),
+			fileSize : enforce(getSingleElemByClass(view, galk.mediaFileSize)),
+			dims : enforce(getSingleElemByClass(view, galk.mediaDims)),
+			loadStatus : enforce(getSingleElemByClass(view, galk.mediaStatus)),
+		},
+	};
 };
 
 const bindSlideView = async function(state, doc, view) {
@@ -1060,6 +1079,7 @@ const bindSlideView = async function(state, doc, view) {
 	};
 
 	svEls.scaleBtn.classList.add(galk.disabled);
+	bindMediaAttributes(svEls, null);
 
 	let invScaleMode = state.scaleMode === `fit` ? `full` : `fit`;
 	let invScaleModeFrag = stateAsFragment(
@@ -1100,6 +1120,10 @@ const bindSlideView = async function(state, doc, view) {
 		svEls.scaleBtn.href = invScaleModeFrag;
 		svEls.scaleBtn.classList.remove(galk.disabled);
 
+		/* attributes: */
+		bindMediaAttributes(svEls, info);
+		svEls.mediaAttrBtn.classList.remove(galk.disabled);
+
 		/* thumbnail image: */
 
 		svEls.thumbElem.hidden = true;
@@ -1128,22 +1152,35 @@ const bindSlideView = async function(state, doc, view) {
 			primeVideoMediaViewingEvent(
 				revoked, state, doc, view, svEls, info);
 
+			// disabled for now due to poor results in waterfox:
+			//for (let type of [`progress`, `load`, `suspend`]) {
+			//	svEls.vidElem.addEventListener(type, function f(ev) {
+			//		if (revoked()) {
+			//			ev.currentTarget.removeEventListener(ev.type, f, false);
+			//			return;};
+
+			//		dbg && logDebug(`media (video) ${ev.type} event triggered`);
+			//		onMediaLoadProgress(svEls, ev.currentTarget, info);
+			//	}, false);
+			//};
+
 			if (updateMediaAttr(svEls.vidElem, `src`, info.mediaHref)) {
 				/* release focus when switching src: */
 				toggleMediaIsFocused(doc, false);};
 
-			if (!videoIsLoaded(svEls, info)) {
+			if (videoIsPartiallyOrFullyLoaded(svEls, info)) {
+				svEls.thumbElem.classList.add(galk.animateToHidden);
+			} else {
 				svEls.vidElem.addEventListener(`loadeddata`, function f(ev) {
 					ev.currentTarget.removeEventListener(ev.type, f, false);
 					if (revoked()) {
 						return;};
 
 					log(`media (video) ${ev.type} event triggered`);
-
 					svEls.thumbElem.classList.add(galk.animateToHidden);
+					onMediaLoadProgress(svEls, ev.currentTarget, info);
 				}, false);
-			} else {
-				svEls.thumbElem.classList.add(galk.animateToHidden);};
+			};
 
 			svEls.vidElem.hidden = false;
 
@@ -1353,7 +1390,73 @@ const onDefocusMediaBtnClick = function(ev) {
 		ev.target.ownerDocument, false);
 };
 
+const onMediaLoadProgress = function(svEls, mediaEl, postInfo) {
+	// disabled for now due to poor results in waterfox:
+	//let ldProgress = mediaElemBufferCoverage(mediaEl);
+	//dbg && logDebug(`media load progress:`, ldProgress);
+	//bindMediaAttributes(svEls, postInfo, ldProgress);
+};
+
+const bindMediaAttributes = function(svEls, postInfo, ldProgress) {
+	dbg && assert(typeof postInfo === `object`);
+
+	svEls.mediaAttrBtn.classList.add(galk.disabled);
+	if (postInfo === null
+		|| !postInfo.mediaHref)
+	{
+		return;};
+
+	svEls.mediaAttrBtn.href = postInfo.mediaHref;
+
+	dbg && assert(typeof ldProgress === `number` || ldProgress === undefined);
+	if (ldProgress !== undefined) {
+		ldProgress = Math.min(1, Math.max(0, ldProgress));};
+
+	svEls.mediaAttr.dims.textContent =
+		`${postInfo.width}×${postInfo.height}`;
+	svEls.mediaAttr.fileExt.textContent =
+		(postInfo.mediaExtn || ``).toUpperCase();
+
+	let mb = `?`;
+	if (isLength(postInfo.fileSize)) {
+		let sizeMb = postInfo.fileSize / 1000000;
+		if (Number.isFinite(sizeMb)) {
+			mb = sizeMb.toFixed(2);};
+	};
+
+	svEls.mediaAttr.fileSize.textContent = `${mb} MB`;
+
+	svEls.mediaAttr.loadStatus.textContent =
+		ldProgress < 1
+			? `(${Math.trunc(ldProgress * 100)}%)`
+			: ``;
+
+	svEls.mediaAttrBtn.classList.remove(galk.disabled);
+};
+
+const mediaElemBufferCoverage = function(el) {
+	dbg && assert(el instanceof HTMLMediaElement);
+
+	let mediaDur = el.duration;
+	if (!(mediaDur > 0) || !Number.isFinite(mediaDur)) {
+		return 1;};
+
+	let buf = el.buffered;
+	if (!(buf instanceof TimeRanges)) {
+		return 1;};
+
+	let bufDur = 0;
+	for (let i = 0, n = buf.length; i < n; ++i) {
+		bufDur += (buf.end(i) - buf.start(i)) || 0;
+	};
+	dbg && assert(bufDur >= 0);
+
+	return Math.min(1, bufDur / mediaDur);
+};
+
 const bindMediaPlaceholder = function(revoked, doc, phldrElem, postInfo) {
+	dbg && assert(typeof postInfo === `object` && postInfo !== null);
+
 	phldrElem.hidden = true;
 	phldrElem.removeAttribute(`srcset`);
 
@@ -1381,7 +1484,7 @@ const bindMediaPlaceholder = function(revoked, doc, phldrElem, postInfo) {
 
 const bindNotesOverlay = function(state, doc, ovr, postInfo, notes) {
 	dbg && assert(ovr instanceof Element);
-	dbg && assert(typeof postInfo === `object`);
+	dbg && assert(typeof postInfo === `object` && postInfo !== null);
 	dbg && assert(Array.isArray(notes));
 
 	log(`binding notes overlay (${notes.length} notes) …`);
@@ -1454,9 +1557,9 @@ const bindNavigationButtons = function(
 				btn.classList.remove(galk.animatePulseOpacity);};
 			/* reflow is required to restart the animation: */
 			setTimeout(() => {
-				if (!revoked()) {
-					for (let btn of btns) {
-						btn.classList.add(galk.animatePulseOpacity);};};});
+				/* no harm continuing even if revoked(): */
+				for (let btn of btns) {
+					btn.classList.add(galk.animatePulseOpacity);};});
 		};
 	};
 
@@ -1519,7 +1622,7 @@ const primeVideoMediaViewingEvent = function(
 		if (dispatched || revoked()) {
 			return true;};
 
-		if (videoIsLoaded(svEls, info) && mediaIsFocused(doc)) {
+		if (videoIsPartiallyOrFullyLoaded(svEls, info) && mediaIsFocused(doc)) {
 			dispatchMediaViewingEvent(state, view, info.postId);
 			dispatched = true;
 			return true;
@@ -1544,7 +1647,7 @@ const primeVideoMediaViewingEvent = function(
 	};
 };
 
-const videoIsLoaded = function(svEls, info) {
+const videoIsPartiallyOrFullyLoaded = function(svEls, info) {
 	return info.type === `swf`
 		? true /* no reliable events for <object> */
 		: svEls.vidElem.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
@@ -2392,7 +2495,8 @@ const postInfosFromDanbooruApiPostsList = function(state, posts) {
 
 const danbooruApiPostFieldsSelector = [
 	`id`, `md5`, `image_width`, `width`, `image_height`, `height`, `file_url`,
-	`large_file_url`, `sample_url`, `preview_file_url`, `preview_url`,]
+	`large_file_url`, `sample_url`, `preview_file_url`, `preview_url`,
+	`file_size`, `tag_string_artist`, `artist`]
 	.join(`,`);
 
 const postInfoFromDanbooruApiPost = function(state, post) {
@@ -2418,11 +2522,22 @@ const postInfoFromDanbooruApiPost = function(state, post) {
 	} else {
 		md5 = undefined;};
 
-	let type = getMediaType(mediaHref);
-	if (type === `ugoira` && getMediaType(sampleHref) === `video`) {
+	let mediaUrl = tryParseHref(mediaHref);
+	let originalExtn = getMediaFileExtn(mediaUrl);
+	let type = getMediaType(mediaUrl);
+	if (type === `ugoira`
+		&& getMediaType(tryParseHref(sampleHref)) === `video`)
+	{
 		/* danbooru provides webms as samples: */
 		type = `video`;
 		mediaHref = sampleHref;
+	};
+
+	let artistTags = [];
+	if (Array.isArray(artistTags)) {
+		artistTags = post.artist;
+	} else if (typeof post.tag_string_artist === `string`) {
+		artistTags = post.tag_string_artist.split(/\s/).filter(s => s.length);
 	};
 
 	return {
@@ -2431,9 +2546,12 @@ const postInfoFromDanbooruApiPost = function(state, post) {
 		mediaHref,
 		sampleHref,
 		thumbnailHref,
+		mediaExtn : originalExtn,
 		width : (post.image_width || post.width)|0,
 		height : (post.image_height || post.height)|0,
-		md5,};
+		md5,
+		fileSize : isLength(post.file_size) ? post.file_size : -1,
+		artistTags,};
 };
 
 const postInfosFromGelbooruApiPostsElem = function(state, postsElem) {
@@ -2489,10 +2607,11 @@ const postInfoFromGelbooruApiPostElem = function(state, post) {
 
 	return {
 		postId,
-		type : getMediaType(mediaHref),
+		type : getMediaType(tryParseHref(mediaHref)),
 		mediaHref,
 		sampleHref,
 		thumbnailHref,
+		mediaExtn : getMediaFileExtn(tryParseHref(mediaHref)),
 		width : post.getAttribute(`width`)|0,
 		height : post.getAttribute(`height`)|0,
 		md5,};
@@ -2558,22 +2677,34 @@ const postNotesFromGelbooruApiNotesElem = function(state, postId, notesElem) {
 	return notes;
 };
 
-const getMediaType = function(href) {
+const getMediaType = function(url) {
 	let type = `image`;
 
-	let url = tryParseHref(href);
-	if (url !== null) {
-		let p = url.pathname.toLowerCase();
-		if (p.endsWith(`.webm`) || p.endsWith(`.mp4`)) {
+	let ext = getMediaFileExtn(url);
+	if (ext !== undefined) {
+		if (ext === `webm` || ext === `mp4`) {
 			type = `video`;
-		} else if (p.endsWith(`.swf`)) {
+		} else if (ext === `swf`) {
 			type = `swf`;
-		} else if (p.endsWith(`.zip`)) {
+		} else if (ext === `zip`) {
 			type = `ugoira`;
 		};
 	};
 
 	return type;
+};
+
+const getMediaFileExtn = function(url) {
+	let ext = undefined;
+
+	if (url !== null) {
+		let p = url.pathname.toLowerCase().trimRight();
+		let i = p.lastIndexOf(`.`);
+		if (i >= 1 && i < p.length - 1) {
+			ext = p.slice(i + 1);};
+	};
+
+	return ext;
 };
 
 const reportInvalidResponse = function(href, xhr) {
@@ -3188,10 +3319,10 @@ const lengthOf = function(xs) {
 		return -1;};
 
 	let len = Reflect.get(Object(xs), `length`);
-	return isValidLength(len) ? len : -1;
+	return isLength(len) ? len : -1;
 };
 
-const isValidLength = function(len) {
+const isLength = function(len) {
 	return Number.isSafeInteger(len) && len >= 0;
 };
 
@@ -3326,6 +3457,8 @@ const getGlobalStyleRules = function(domain) {
 			--${galk.rSvInactOpacity} : 0.6;
 			--${galk.cSvAction} : hsl(33, 100%, 70%);
 			--${galk.cExLink} : hsl(233, 100%, 75%);
+			--${galk.cBtnBg} : hsla(0, 0%, 100%, 1);
+			--${galk.cBtnFg} : hsla(0, 0%, 18%, 1);
 			--${galk.cNoteBg} : hsla(60, 100%, 96.7%, 0.3);
 			--${galk.cNoteBorder} : hsla(0, 0%, 0%, 0.3);
 			--${galk.cNoteCaption} : hsla(0, 0%, 10%, 1);
@@ -3333,7 +3466,9 @@ const getGlobalStyleRules = function(domain) {
 			--${galk.dSvWidth} : 185mm;
 			--${galk.dSvContentMinHeight} : 74mm;
 			--${galk.dSvBarHeight} : 11mm;
+			--${galk.dSvBarFontSize} : 3mm;
 			--${galk.dThumbOvrBtnSize} : 15mm;
+			--${galk.ffNarrow} : Arial, Helvetica, sans-serif;
 		}`,
 
 		`:root.${galk.theme}-dark {
@@ -3555,9 +3690,29 @@ const getGlobalStyleRules = function(domain) {
 			background-image : url(${svgHref(svgCircleRing)});
 		}`,
 
+		`.${galk.svCtrlBar} .${galk.btnLabel} {
+			display : flex;
+			flex-direction : column;
+			align-items : stretch;
+			justify-content : center;
+			height : calc(var(--${galk.dSvBarHeight}) * 0.7);
+			border-radius : 1.6mm;
+			padding : 0 2.5mm;
+			font-family : var(--${galk.ffNarrow});
+			line-height : 1;
+			font-size : var(--${galk.dSvBarFontSize});
+			color : var(--${galk.cBtnFg});
+			text-shadow : none;
+			background-color : var(--${galk.cBtnBg});
+		}`,
+
 		`.${galk.svCtrlBar} > .${galk.disabled} > .${galk.btnIcon} {
 			opacity : 0.4;
 			background-image : url(${svgHref(svgCircleRing)}) !important;
+		}`,
+
+		`.${galk.svCtrlBar} > .${galk.disabled} > .${galk.btnLabel} {
+			visibility : hidden;
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.scale}.${galk.scaleMode}-full
