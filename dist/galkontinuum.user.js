@@ -377,7 +377,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.20",
-	"version_name": "2019.05.20 (a7eeb88ed7a49338fe47a1d2a5348efaaca4d826)",
+	"version_name": "2019.05.20 (7b969e110495faf074ced02e38749625c54c0228)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -939,7 +939,7 @@ const ensureSlideView = function(state, doc, parentElem) {
 					<section>
 						<header>Galkontinuum</header>
 						<span>Version ${manif.version_name}</span>
-						<a href='${encodeURI(manif.homepage)}'>User Guide</a>
+						<a href='${encodeURI(manif.homepage_url)}'>User Guide</a>
 					</section>
 				</aside>
 
