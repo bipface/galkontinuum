@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.19
+// @version		2019.05.20
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL https://github.com/bipface/galkontinuum/tree/master/#readme
 // @downloadURL https://github.com/bipface/galkontinuum/raw/master/dist/galkontinuum.user.js
@@ -218,7 +218,7 @@ known issues:
 	- buttons too small on e621 on mobile
 	- gelbooru: thumbnail overlay is exactly the size of the thumbnail itself
 		https://i.imgur.com/YJjIzxt.png
-		and not centred:
+		and icon doesn't scale:
 		https://gelbooru.com/index.php?page=post&s=list&tags=id%3a4730432
 	- browser history doesn't work well on danbooru since they append ?q=…
 		to the post page hrefs
@@ -238,7 +238,6 @@ planned enhancements:
 
 	- rule34: use main-DB api for getting post info
 	- more hotkeys
-	- help/about page
 	- artist tags on footer
 	- navigation on current page without API requests?
 	- post pages: add a link back to the gallery page on which it appears (?)
@@ -377,8 +376,8 @@ const manifest = {
 	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
-	"version": "2019.05.19",
-	"version_name": "2019.05.19 (3a8a7529f5141b11886e6ab632313d54cbb4a37c)",
+	"version": "2019.05.20",
+	"version_name": "2019.05.20 (a7eeb88ed7a49338fe47a1d2a5348efaaca4d826)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -787,10 +786,13 @@ const onKeyDownGlobal = function(ev) {
 		/* hotkeys are only active in the view's axis or thumbnail overlay */
 
 	} else if (ev.key === `Escape`) {
-		if (trySelectAndClickDisplayedElem(
-			view, `.${galk.svCtrlBar} > .${galk.close}`)
-			|| trySelectAndClickDisplayedElem(
-				view, `.${galk.svCtrlBar} > .${galk.defocus}`))
+		if (trySelectAndClickDisplayedElem(view,
+			`.${galk.svPanel}.${galk.helpVisible}
+				.${galk.svCtrlBar} > .${galk.help}`)
+			|| trySelectAndClickDisplayedElem(view,
+				`.${galk.svCtrlBar} > .${galk.close}`)
+			|| trySelectAndClickDisplayedElem(view,
+				`.${galk.svCtrlBar} > .${galk.defocus}`))
 		{
 			ev.stopImmediatePropagation();
 			ev.stopPropagation();};
@@ -908,6 +910,8 @@ const ensureSlideView = function(state, doc, parentElem) {
 	view.classList.add(galk.svPanel);
 	view.hidden = true;
 
+	let manif = manifest || {};
+
 	view.insertAdjacentHTML(`beforeend`,
 		`<header class='${galk.svCtrlBar}'>
 			<a title='Toggle Notes' class='${galk.notes} ${galk.disabled}'>
@@ -931,9 +935,13 @@ const ensureSlideView = function(state, doc, parentElem) {
 
 		<section class='${galk.svContentPanel}'>
 			<section class='${galk.svContentStack}'>
-				<aside class='${galk.helpOverlay}' hidden=''></aside>
-
-				<aside class='${galk.metaOverlay}' hidden=''></aside>
+				<aside class='${galk.helpOverlay}'>
+					<section>
+						<header>Galkontinuum</header>
+						<span>Version ${manif.version_name}</span>
+						<a href='${encodeURI(manif.homepage)}'>User Guide</a>
+					</section>
+				</aside>
 
 				<aside class='${galk.notesOverlay}'></aside>
 
@@ -980,7 +988,7 @@ const ensureSlideView = function(state, doc, parentElem) {
 			<a class='${galk.postPage}'>
 				<figure class='${galk.btnIcon}'></figure></a>
 
-			<a class='${galk.mediaAttr} ${galk.disabled}'>
+			<a title='Direct Link' class='${galk.mediaAttr} ${galk.disabled}'>
 				<span class='${galk.btnLabel}'>
 					<span>
 						<span class='${galk.mediaFileExt}'></span>
@@ -1031,6 +1039,8 @@ const getSlideViewElements = function(view) {
 			`.${galk.svCtrlBar} > .${galk.defocus}`)),
 		postPageBtn : enforce(querySingleElem(view,
 			`.${galk.svCtrlBar} > .${galk.postPage}`)),
+		helpBtn : enforce(querySingleElem(view,
+			`.${galk.svCtrlBar} > .${galk.help}`)),
 
 		mediaAttrBtn : enforce(querySingleElem(view,
 			`.${galk.svCtrlBar} > .${galk.mediaAttr}`)),
@@ -1074,6 +1084,7 @@ const bindSlideView = async function(state, doc, view) {
 	let svEls = getSlideViewElements(view);
 
 	view.classList.remove(galk.notesVisible);
+	view.classList.toggle(galk.helpVisible, state.modal === `help`);
 
 	if (isPostId(state.currentPostId)) {
 		view.hidden = false;
@@ -1365,6 +1376,11 @@ const bindSlideView = async function(state, doc, view) {
 	svEls.focusBtn.addEventListener(`click`, onFocusMediaBtnClick, false);
 	/* release-focus button: */
 	svEls.defocusBtn.addEventListener(`click`, onDefocusMediaBtnClick, false);
+
+	/* help button: */
+	svEls.helpBtn.href = stateAsFragment(
+		{...state, modal : state.modal === `help` ? undefined : `help`,},
+		currentHref);
 
 	/* prev and next buttons: */
 	bindNavigationButtons(revoked, state, doc, svEls.prevBtns, -1);
@@ -3487,11 +3503,15 @@ const getGlobalStyleRules = function(domain) {
 
 		`:root {
 			--${galk.cSvBg} : hsl(232, 17%, 46%);
+			--${galk.cSvHelpBg} : hsla(232, 17%, 46%, 0.96);
+			--${galk.cSvHelpFg} : hsla(0, 0%, 95%, 1);
 			--${galk.rSvInactOpacity} : 0.6;
 			--${galk.cSvAction} : hsl(33, 100%, 70%);
 			--${galk.cExLink} : hsl(233, 100%, 75%);
 			--${galk.cBtnBg} : hsla(0, 0%, 100%, 1);
 			--${galk.cBtnFg} : hsla(0, 0%, 18%, 1);
+			--${galk.dBtnRadius} : 1.6mm;
+			--${galk.dBtnPadding} : 2.5mm;
 			--${galk.cNoteBg} : hsla(60, 100%, 96.7%, 0.3);
 			--${galk.cNoteBorder} : hsla(0, 0%, 0%, 0.3);
 			--${galk.cNoteCaption} : hsla(0, 0%, 10%, 1);
@@ -3502,6 +3522,7 @@ const getGlobalStyleRules = function(domain) {
 			--${galk.dSvBarFontSize} : 3mm;
 			--${galk.dThumbOvrBtnSize} : 15mm;
 			--${galk.ffNarrow} : Arial, Helvetica, sans-serif;
+			--${galk.ffTitle} : 'Gill Sans MT',Verdana,'DejaVu Sans',sans-serif;
 		}`,
 
 		`:root.${galk.theme}-dark {
@@ -3519,7 +3540,7 @@ const getGlobalStyleRules = function(domain) {
 			flex-direction : column;
 			align-items : center;
 			justify-content : flex-start;
-			min-height : calc(var(--${galk.dSvContentMinHeight}) + 50vh);
+			min-height : calc(100vh - (2 * var(--${galk.dSvBarHeight})));
 		}`,
 
 		`.${galk.svPanel}[hidden], .${galk.svPanel} [hidden] {
@@ -3687,6 +3708,60 @@ const getGlobalStyleRules = function(domain) {
 			visibility : visible;
 		}`,
 
+		`.${galk.svContentStack} > .${galk.helpOverlay} {
+			display : none;
+			min-width : calc(var(--galkontinuum-dSvWidth) - var(--${galk.dSvBarHeight}));
+			min-height : calc(var(--galkontinuum-dSvContentMinHeight) - var(--${galk.dSvBarHeight}));
+			position : absolute;
+			z-index : 5;
+		}`,
+
+		`.${galk.svPanel}.${galk.helpVisible} .${galk.helpOverlay} {
+			display : flex;
+		}`,
+
+		`.${galk.helpOverlay} {
+			flex-direction : column;
+			align-items : center;
+			box-sizing : border-box;
+			padding : calc(var(--${galk.dSvBarHeight}) / 2);
+			color : var(--${galk.cSvHelpFg});
+			background-color : var(--${galk.cSvHelpBg});
+			text-shadow : 0 0 1mm black;
+		}`,
+
+		`.${galk.helpOverlay} > section {
+			display : flex;
+			align-items : start;
+			flex-direction : column;
+			font-family : var(--${galk.ffNarrow});
+			font-size : 3.5mm;
+		}`,
+
+		`.${galk.helpOverlay} > section > :not(header) {
+			margin-bottom : 1.5mm;
+		}`,
+
+		`.${galk.helpOverlay} header {
+			font-family : var(--${galk.ffTitle});
+			font-variant : small-caps;
+			font-size : 8mm;
+		}`,
+
+		`.${galk.helpOverlay} a {
+			opacity : var(--${galk.rSvInactOpacity});
+			color : var(--${galk.cBtnFg});
+			background-color : var(--${galk.cBtnBg});
+			padding : 0.5mm var(--${galk.dBtnPadding});
+			border-radius : var(--${galk.dBtnRadius});
+			text-shadow : none;
+		}`,
+
+		`.${galk.helpOverlay} a:hover {
+			opacity : 1;
+			color : var(--${galk.cBtnFg});
+		}`,
+
 		/* --- controls --- */
 
 		`.${galk.svCtrlBar} {
@@ -3709,7 +3784,9 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.svCtrlBar} > a:hover,
 		.${galk.svPanel}.${galk.notesVisible}
-			.${galk.svCtrlBar} > .${galk.notes}
+			.${galk.svCtrlBar} > .${galk.notes},
+		.${galk.svPanel}.${galk.helpVisible}
+			.${galk.svCtrlBar} > .${galk.help}
 		{
 			opacity : 1;
 		}`,
@@ -3729,8 +3806,8 @@ const getGlobalStyleRules = function(domain) {
 			align-items : stretch;
 			justify-content : center;
 			height : calc(var(--${galk.dSvBarHeight}) * 0.7);
-			border-radius : 1.6mm;
-			padding : 0 2.5mm;
+			border-radius : var(--${galk.dBtnRadius});
+			padding : 0 var(--${galk.dBtnPadding});
 			font-family : var(--${galk.ffNarrow});
 			line-height : 1;
 			font-size : var(--${galk.dSvBarFontSize});
@@ -3800,6 +3877,9 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.svPanel}:not(.${galk.notesVisible})
 			.${galk.svCtrlBar} > .${galk.notes}:hover
+			> .${galk.btnIcon},
+		.${galk.svPanel}:not(.${galk.helpVisible})
+			.${galk.svCtrlBar} > .${galk.help}:hover
 			> .${galk.btnIcon}
 		{
 			opacity : var(--${galk.rSvInactOpacity});
@@ -4067,9 +4147,10 @@ const getGlobalStyleRules = function(domain) {
 			overflow-x : unset;
 		}`,
 
-		`.${galk.svPanel} > header, .${galk.svPanel} > footer {
+		`.${galk.svPanel} header, .${galk.svPanel} footer {
 			/* override <header> style set by danbooru: */
 			margin : 0;
+			line-height : initial;
 		}`,
 
 		`.${galk.svPanel} figure, .${galk.thumbOverlay} figure {
