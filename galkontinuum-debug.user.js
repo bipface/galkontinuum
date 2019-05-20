@@ -841,12 +841,14 @@ const onMediaViewing = function({detail : {state, postId}}) {
 	if (postUrl === null) {
 		return;};
 
-	/* add the post page to the browser's history: */
-
-	let s = history.state;
-	let loc = location.href;
-	history.replaceState({}, ``, postUrl.href);
-	history.replaceState(s, ``, loc);
+	/* add the post page to the browser's history:
+	(a relatively expensive synchronous operation — deferred execution) */
+	setTimeout(() => {
+		let s = history.state;
+		let loc = location.href;
+		history.replaceState({}, ``, postUrl.href);
+		history.replaceState(s, ``, loc);
+	});
 };
 
 const getSlideViewParent = function(state, doc) {
