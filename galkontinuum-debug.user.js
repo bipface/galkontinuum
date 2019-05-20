@@ -906,7 +906,7 @@ const ensureSlideView = function(state, doc, parentElem) {
 					<section>
 						<header>Galkontinuum</header>
 						<span>Version ${manif.version_name}</span>
-						<a href='${encodeURI(manif.homepage)}'>User Guide</a>
+						<a href='${encodeURI(manif.homepage_url)}'>User Guide</a>
 					</section>
 				</aside>
 
