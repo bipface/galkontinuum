@@ -377,7 +377,7 @@ const manifest = {
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
 	"version": "2019.05.20",
-	"version_name": "2019.05.20 (7b969e110495faf074ced02e38749625c54c0228)",
+	"version_name": "2019.05.20 (5d4c638025f17cdba93a0f6e4680965c76f64a5b)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
@@ -874,12 +874,14 @@ const onMediaViewing = function({detail : {state, postId}}) {
 	if (postUrl === null) {
 		return;};
 
-	/* add the post page to the browser's history: */
-
-	let s = history.state;
-	let loc = location.href;
-	history.replaceState({}, ``, postUrl.href);
-	history.replaceState(s, ``, loc);
+	/* add the post page to the browser's history:
+	(a relatively expensive synchronous operation — deferred execution) */
+	setTimeout(() => {
+		let s = history.state;
+		let loc = location.href;
+		history.replaceState({}, ``, postUrl.href);
+		history.replaceState(s, ``, loc);
+	});
 };
 
 const getSlideViewParent = function(state, doc) {
