@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.20
+// @version		2019.05.21
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL	.
 // @downloadURL	.
@@ -205,6 +205,9 @@ range.
 
 known issues:
 
+	- animatePulseOpacity re-fires when changing scale-mode
+	- file size unknwon on gelbooru-based sites
+		(do HEAD request to find out)
 	- full-size cropped on danbooru mobile layout
 	- bug in moebooru api yields deleted results if any id:<n / id:>n term
 		is specified; no `deleted:false` to override it with
@@ -213,8 +216,6 @@ known issues:
 		doesn't affect swf/video
 	- player appears with wrong dimensions before video starts loading
 	- blacklist may interfere on moebooru
-	- navigating on danbooru does't skip restricted posts
-		test: https://danbooru.donmai.us/posts?tags=id%3A3478499+status%3Adeleted
 	- buttons too small on e621 on mobile
 	- gelbooru: thumbnail overlay is exactly the size of the thumbnail itself
 		https://i.imgur.com/YJjIzxt.png
@@ -1572,12 +1573,7 @@ const bindNavigationButtons = function(
 			ev.stopPropagation();
 		} else {
 			for (let btn of btns) {
-				btn.classList.remove(galk.animatePulseOpacity);};
-			/* reflow is required to restart the animation: */
-			setTimeout(() => {
-				/* no harm continuing even if revoked(): */
-				for (let btn of btns) {
-					btn.classList.add(galk.animatePulseOpacity);};});
+				applyAnimatePulseOpacityClass(btn);};
 		};
 	};
 
@@ -3491,7 +3487,8 @@ const getGlobalStyleRules = function(domain) {
 			--${galk.dSvBarFontSize} : 3mm;
 			--${galk.dThumbOvrBtnSize} : 15mm;
 			--${galk.ffNarrow} : Arial, Helvetica, sans-serif;
-			--${galk.ffTitle} : 'Gill Sans MT',Verdana,'DejaVu Sans',sans-serif;
+			--${galk.ffTitle} : 'Gill Sans MT', Verdana, 'DejaVu Sans',
+				sans-serif;
 		}`,
 
 		`:root.${galk.theme}-dark {
@@ -3873,16 +3870,6 @@ const getGlobalStyleRules = function(domain) {
 			visibility : hidden;
 		}`,
 
-		`.${galk.scaleMode}-full > .${galk.ctrlOverlay} > .${galk.nav} {
-			/* don't show the nav overlay in full-size scale mode: */
-			display : none;
-		}`,
-
-		`:root.${galk.mediaIsFocused} .${galk.ctrlOverlay} {
-			/* don't show any overlay when focused: */
-			display : none;
-		}`,
-
 		`.${galk.ctrlOverlay} > * {
 			grid-row : 1;
 			display : flex;
@@ -3890,6 +3877,11 @@ const getGlobalStyleRules = function(domain) {
 			align-items : center;
 			background-color : var(--${galk.cSvBg});
 			opacity : 0;
+		}`,
+
+		`:root.${galk.mediaIsFocused} .${galk.ctrlOverlay} > * {
+			/* don't show any overlay when focused: */
+			visibility : hidden !important;
 		}`,
 
 		`.${galk.ctrlOverlay} > .${galk.prev} {
@@ -3933,8 +3925,11 @@ const getGlobalStyleRules = function(domain) {
 			--${galk.pulseOpacity} : var(--${galk.rSvInactOpacity});
 		}`,
 
-		`.${galk.ctrlOverlay} > .${galk.nav}.${galk.ready} {
+		`:not(.${galk.scaleMode}-full) > .${galk.ctrlOverlay}
+			> .${galk.nav}.${galk.ready}
+		{
 			visibility : visible;
+			/* don't show the nav overlay in full-size scale mode */
 		}`,
 
 		(matchMedia(`(hover : none)`).matches
@@ -4089,15 +4084,27 @@ const getGlobalStyleRules = function(domain) {
 			}
 		}`,
 
-		`.${galk.animatePulseOpacity} {
-			animation-name : ${galk.pulseOpacity};
+		`.${galk.animatePulseOpacity}, .${galk.animatePulseOpacity}-again {
 			animation-iteration-count : 1;
 			animation-duration : 0.2s;
 			animation-timing-function : linear;
 			animation-fill-mode : forwards;
 		}`,
 
+		`.${galk.animatePulseOpacity} {
+			animation-name : ${galk.pulseOpacity};
+		}`,
+
+		`.${galk.animatePulseOpacity}-again {
+			animation-name : ${galk.pulseOpacity}-again;
+		}`,
+
 		`@keyframes ${galk.pulseOpacity} {
+			from {opacity : var(--${galk.pulseOpacity});}
+			to {}
+		}`,
+
+		`@keyframes ${galk.pulseOpacity}-again {
 			from {opacity : var(--${galk.pulseOpacity});}
 			to {}
 		}`,
@@ -4134,6 +4141,15 @@ const spinnerStyleRules =
 	animation-iteration-count : infinite;
 	animation-duration : 0.36s;
 	animation-timing-function : linear;`;
+
+const applyAnimatePulseOpacityClass = function(el) {
+	dbg && assert(el instanceof HTMLElement);
+	/* restart the pulse animation by switching the class name: */
+	let c = galk.animatePulseOpacity;
+	let has = el.classList.contains(c);
+	el.classList.toggle(c, !has);
+	el.classList.toggle(c+`-again`, has);
+};
 
 /* --- assets --- */
 
