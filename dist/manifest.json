@@ -4,8 +4,8 @@
 	"author": "Bipface",
 	"key": "u+fV2D5ukOQp8yXOpGU2itSBKYT22tnFu5Nbn5u12nI=",
 	"homepage_url": "https://github.com/bipface/galkontinuum/tree/master/#readme",
-	"version": "2019.05.20",
-	"version_name": "2019.05.20 (5d4c638025f17cdba93a0f6e4680965c76f64a5b)",
+	"version": "2019.05.21",
+	"version_name": "2019.05.21 (f30ef4f282681d71a36f5230458d083fc7523a6f)",
 	"minimum_chrome_version": "60",
 	"converted_from_user_script": true,
 	"content_scripts": [
