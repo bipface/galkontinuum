@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.05.21
+// @version		2019.06.10
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL	.
 // @downloadURL	.
@@ -205,7 +205,6 @@ range.
 
 known issues:
 
-	- animatePulseOpacity re-fires when changing scale-mode
 	- file size unknwon on gelbooru-based sites
 		(do HEAD request to find out)
 	- full-size cropped on danbooru mobile layout
@@ -249,6 +248,7 @@ planned enhancements:
 		- reversed navigation ?
 		- api requ. page size / prefetch threshold
 		- history
+		- default video volume
 	- markup in notes?
 
 test cases:
@@ -1767,10 +1767,14 @@ const thumbnailInfo = function(state, elem) {
 
 		if (info !== null) {
 			/* thumbnail has multiple <a> children */
-			return null;};
+			info = null;
+			break;};
 
 		info = {postId, url};
 	};
+
+	if (info === null) {
+		logError(`failed to acquire info from thumbnail element:`, elem);};
 
 	return info;
 };
@@ -2756,7 +2760,8 @@ const isGalleryUrl = function(url) {
 			break;
 
 		case `gelbooru` :
-			return (url.pathname === `/` || url.pathname === `/index.php`)
+			/* can have any number of leading slashes apparently: */
+			return /^\/+(index\.php)?$/.test(url.pathname)
 				&& url.searchParams.get(`page`) === `post`
 				&& url.searchParams.get(`s`) === `list`;
 
@@ -2820,7 +2825,8 @@ const postIdFromUrl = function({origin}, url) {
 			break;
 
 		case `gelbooru` :
-			if ((url.pathname === `/` || url.pathname === `/index.php`)
+			/* can have any number of leading slashes apparently: */
+			if (/^\/+(index\.php)?$/.test(url.pathname)
 				&& url.searchParams.get(`page`) === `post`
 				&& url.searchParams.get(`s`) === `view`)
 			{
