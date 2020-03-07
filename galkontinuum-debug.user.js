@@ -1,8 +1,8 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2019.06.10
+// @version		2020.03.06
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL	.
 // @downloadURL	.
@@ -205,6 +205,7 @@ range.
 
 known issues:
 
+	- danbooru dark theme
 	- file size unknwon on gelbooru-based sites
 		(do HEAD request to find out)
 	- full-size cropped on danbooru mobile layout
@@ -236,6 +237,7 @@ known issues:
 
 planned enhancements:
 
+	- markup in notes
 	- rule34: use main-DB api for getting post info
 	- more hotkeys
 	- artist tags on footer
@@ -249,7 +251,6 @@ planned enhancements:
 		- api requ. page size / prefetch threshold
 		- history
 		- default video volume
-	- markup in notes?
 
 test cases:
 
@@ -286,8 +287,8 @@ test cases:
 			special-case for getSlideViewParent)
 		- gelbooru (special-case for getSlideViewParent)
 		- yandere (special-case for thumbnail layout)
-		- e621 (special-case for thumbnail layout)
-
+		- e621 (special-case for thumbnail layout,
+			special-case for svgHref, special-case for api responses)
 	navigation:
 		- navigating before/after current search results list (across pages)
 		- attempting to navigate before first item or after last item
@@ -719,7 +720,7 @@ const hostnameDomainTbl = {
 	[`gelbooru.com`] :
 		{kind : `gelbooru`, name : `gelbooru`},
 	[`e621.net`] :
-		{kind : `danbooru`, subkind : `e621`, name : `e621`},
+		{kind : `danbooru`, subkind : `danbooru`, name : `e621`},
 	[`realbooru.com`] :
 		{kind : `gelbooru`, name : `realbooru`},
 	[`rule34.xxx`] :
@@ -854,7 +855,7 @@ const onMediaViewing = function({detail : {state, postId}}) {
 
 const getSlideViewParent = function(state, doc) {
 	return getSingleElemByClass(doc, `content-post`) /* r34xxx */
-		|| getSingleElemByClass(doc, `content`) /* e621 / safebooru */
+		|| getSingleElemByClass(doc, `content`) /* safebooru */
 		|| doc.getElementById(`content`) /* danbooru */
 		|| getSingleElemByClass(doc, `contain-push`) /* gelbooru */;
 };
@@ -1779,10 +1780,22 @@ const thumbnailInfo = function(state, elem) {
 	return info;
 };
 
+let showThumbnailDynamicTooltips = undefined;
 const thumbnailTitle = function(state, elem) {
 	enforce(elem instanceof HTMLElement);
 
-	let xs = getSingleElemByClass(elem, `preview`);
+	if (getDomain(state).subkind === `danbooru`) {
+		if (showThumbnailDynamicTooltips === undefined) {
+			showThumbnailDynamicTooltips =
+				document.body.dataset.currentUserDisablePostTooltips === `false`;
+		};
+		if (showThumbnailDynamicTooltips) {
+			/* don't show static tooltips: */
+			return ``;};
+	};
+
+	let xs = getSingleElemByClass(elem, `preview`)
+		|| querySingleElem(elem, `img[title]`);
 	if (xs === null) {
 		return ``;};
 
@@ -1798,10 +1811,10 @@ const mediaIsFocused = function(doc) {
 	return doc.documentElement.classList.contains(galk.mediaIsFocused);
 };
 
-const getThumbClass = function({name}) {
-	dbg && assert(typeof name === `string`);
+const getThumbClass = function({subkind}) {
+	dbg && assert(subkind === undefined || typeof subkind === `string`);
 
-	return name === `danbooru`
+	return subkind === `danbooru`
 		? `post-preview`
 		: `thumb`;
 };
@@ -2498,6 +2511,9 @@ const tryRequestNavigatePostId = async function(
 };
 
 const postInfosFromDanbooruApiPostsList = function(state, posts) {
+	if (typeof posts === `object` && !Array.isArray(posts)) {
+		posts = posts.posts; /* e621 api quirk */};
+
 	if (!Array.isArray(posts)) {
 		return null;};
 
@@ -2524,17 +2540,70 @@ const postInfoFromDanbooruApiPost = function(state, post) {
 	{
 		return null;};
 
-	let mediaHref = post.file_url;
+	if (getDomain(state).name === `e621`) {
+		return postInfoFromE621ApiPost(state, post);};
 
-	let sampleHref = post.large_file_url || post.sample_url;
+	let artistTags = [];
+	if (Array.isArray(artistTags)) {
+		artistTags = post.artist;
+	} else if (typeof post.tag_string_artist === `string`) {
+		artistTags = post.tag_string_artist.split(/\s/).filter(s => s.length);
+	};
+
+	return danbooruPostInfoFromRawValues(state, {
+		postId : post.id,
+		mediaHref : post.file_url,
+		sampleHref : post.large_file_url || post.sample_url,
+		thumbnailHref : post.preview_file_url || post.preview_url,
+		md5 : post.md5,
+		fileSize : post.file_size,
+		width : post.image_width || post.width,
+		height : post.image_height || post.height,
+		artistTags,});
+};
+
+const postInfoFromE621ApiPost = function(state, post) {
+	dbg && assert(typeof post === `object`);
+
+	let fileInfo = {};
+	if (typeof post.file === `object`) {
+		fileInfo = post.file;};
+
+	let artistTags = [];
+	if (typeof post.tags === `object` && Array.isArray(post.tags.artist)) {
+		artistTags = post.tags.artist;};
+
+	return danbooruPostInfoFromRawValues(state, {
+		postId : post.id,
+		mediaHref : fileInfo.url,
+		sampleHref : typeof post.sample === `object`
+			? post.sample.url : undefined,
+		thumbnailHref : typeof post.preview === `object`
+			? post.preview.url : undefined,
+		md5 : fileInfo.md5,
+		fileSize : fileInfo.size,
+		width : fileInfo.width,
+		height : fileInfo.height,
+		artistTags,});
+};
+
+const danbooruPostInfoFromRawValues = function(state, {
+	postId,
+	mediaHref,
+	sampleHref,
+	thumbnailHref,
+	fileSize,
+	md5,
+	artistTags,
+	width,
+	height,})
+{
 	if (sampleHref === mediaHref) {
 		sampleHref = undefined;};
 
-	let thumbnailHref = post.preview_file_url || post.preview_url;
 	if (thumbnailHref === mediaHref) {
 		thumbnailHref = undefined;};
 
-	let md5 = post.md5;
 	if (typeof md5 === `string` && /^[0-9a-fA-F]{32}$/.test(md5)) {
 		md5 = md5.toLowerCase();
 	} else {
@@ -2551,24 +2620,17 @@ const postInfoFromDanbooruApiPost = function(state, post) {
 		mediaHref = sampleHref;
 	};
 
-	let artistTags = [];
-	if (Array.isArray(artistTags)) {
-		artistTags = post.artist;
-	} else if (typeof post.tag_string_artist === `string`) {
-		artistTags = post.tag_string_artist.split(/\s/).filter(s => s.length);
-	};
-
 	return {
-		postId : post.id,
+		postId,
 		type,
 		mediaHref,
 		sampleHref,
 		thumbnailHref,
 		mediaExtn : originalExtn,
-		width : (post.image_width || post.width)|0,
-		height : (post.image_height || post.height)|0,
+		width : width|0,
+		height : height|0,
 		md5,
-		fileSize : isLength(post.file_size) ? post.file_size : -1,
+		fileSize : isLength(fileSize) ? fileSize : -1,
 		artistTags,};
 };
 
@@ -2642,6 +2704,9 @@ const danbooruApiNoteFieldsSelector = [
 const postNotesFromDanbooruApiNotesList = function(state, postId, rawNotes) {
 	/* no results → [],
 		malformed results → throw */
+
+	if (typeof posts === `object` && !Array.isArray(rawNotes)) {
+		rawNotes = rawNotes.notes; /* e621 api quirk */};
 
 	if (!Array.isArray(rawNotes)) {
 		throw new TypeError;};
@@ -2772,8 +2837,8 @@ const isGalleryUrl = function(url) {
 };
 
 test(_ => {
-	assert(isGalleryUrl(new URL(
-		`https://e621.net/post/index/1/absurdres?tags=id:<1837141 order:id`)));
+	//assert(isGalleryUrl(new URL(
+	//	`https://e621.net/post/index/1/absurdres?tags=id:<1837141 order:id`)));
 
 	// todo
 });
@@ -2795,7 +2860,7 @@ const searchExprStringFromUrl = function({origin}, url) {
 			&& xs[1] === `index`
 			&& /^\d+$/.test(xs[2]))
 		{
-			/* path takes precedence searchParams */
+			/* path takes precedence over searchParams */
 			s = xs[3];
 		};
 	};
@@ -2854,7 +2919,9 @@ const requestPostInfoUrl = function(state, postId) {
 				url.pathname = `/posts.json`;
 			} else {
 				url.pathname = `/post/index.json`;};
-			url.searchParams.set(`only`, danbooruApiPostFieldsSelector);
+			if (domain.name !== `e621`) {
+				/* e612 has a slightly different result structure */
+				url.searchParams.set(`only`, danbooruApiPostFieldsSelector);};
 			url.searchParams.set(`limit`, `1`);
 			url.searchParams.set(`tags`, `id:${postId}`);
 
@@ -2935,7 +3002,10 @@ const requestNavigatePostInfoUrl = function(
 			} else {
 				url.pathname = `/post/index.json`;};
 
-			url.searchParams.set(`only`, danbooruApiPostFieldsSelector);
+			if (domain.name !== `e621`) {
+				/* e612 has a slightly different result structure */
+				url.searchParams.set(`only`, danbooruApiPostFieldsSelector);};
+
 			url.searchParams.set(`limit`, `${navigatePostInfoRequPageLen}`);
 
 			let d = direction * idOrder; /* query direction */
@@ -2946,24 +3016,20 @@ const requestNavigatePostInfoUrl = function(
 						? `b${fromPostId}` /* before */
 						: `a${fromPostId}` /* after */);
 			} else {
-				if (d === -1 && domain.subkind === `e621`) {
-					url.searchParams.set(`before_id`, `${fromPostId}`);
-				} else {
-					if (expr !== null && expr.idTerms.length) {
-						/* danb. can't evaluate multiple id: constraints */
-						log(`cannot create navigation request URL - search`
-							+` expression already contains an "id:" term`);
-						return null;};
+				if (expr !== null && expr.idTerms.length) {
+					/* danbooru can't evaluate multiple id: constraints */
+					log(`cannot create navigation request URL - search`
+						+` expression already contains an "id:" term`);
+					return null;};
 
-					if (d === -1) {
-						expr = {...expr,
-							idTerms : [`<${fromPostId}`],
-							orderTerm : `id_desc`,};
-					} else {
-						expr = {...expr,
-							idTerms : [`>${fromPostId}`],
-							orderTerm : `id`,};
-					};
+				if (d === -1) {
+					expr = {...expr,
+						idTerms : [`<${fromPostId}`],
+						orderTerm : `id_desc`,};
+				} else {
+					expr = {...expr,
+						idTerms : [`>${fromPostId}`],
+						orderTerm : `id`,};
 				};
 			};
 
@@ -3769,7 +3835,7 @@ const getGlobalStyleRules = function(domain) {
 			background-size : contain;
 			background-repeat : no-repeat;
 			background-position : center;
-			background-image : url(${svgHref(svgCircleRing)});
+			background-image : url("${svgHref(svgCircleRing)}");
 		}`,
 
 		`.${galk.svCtrlBar} .${galk.btnLabel} {
@@ -3790,7 +3856,7 @@ const getGlobalStyleRules = function(domain) {
 
 		`.${galk.svCtrlBar} > .${galk.disabled} > .${galk.btnIcon} {
 			opacity : 0.4;
-			background-image : url(${svgHref(svgCircleRing)}) !important;
+			background-image : url("${svgHref(svgCircleRing)}") !important;
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.disabled} > .${galk.btnLabel} {
@@ -3800,13 +3866,13 @@ const getGlobalStyleRules = function(domain) {
 		`.${galk.svCtrlBar} > .${galk.scale}.${galk.scaleMode}-full
 			> .${galk.btnIcon}
 		{
-			background-image : url(${svgHref(svgCircleExpand)});
+			background-image : url("${svgHref(svgCircleExpand)}");
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.scale}.${galk.scaleMode}-fit
 			> .${galk.btnIcon}
 		{
-			background-image : url(${svgHref(svgCircleContract)});
+			background-image : url("${svgHref(svgCircleContract)}");
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.postPage}:hover {
@@ -3814,7 +3880,7 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.postPage} > .${galk.btnIcon} {
-			background-image : url(${svgHref(svgCircleLink)});
+			background-image : url("${svgHref(svgCircleLink)}");
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.close}:hover {
@@ -3822,19 +3888,19 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.close} > .${galk.btnIcon} {
-			background-image : url(${svgCircleArrowUpHref});
+			background-image : url("${svgCircleArrowUpHref}");
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.defocus} > .${galk.btnIcon} {
-			background-image : url(${svgHref(svgCircleCtrlOverlay)});
+			background-image : url("${svgHref(svgCircleCtrlOverlay)}");
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.help} > .${galk.btnIcon} {
-			background-image : url(${svgHref(svgCircleQuestion)});
+			background-image : url("${svgHref(svgCircleQuestion)}");
 		}`,
 
 		`.${galk.svCtrlBar} > .${galk.notes} > .${galk.btnIcon} {
-			background-image : url(${svgHref(svgCircleNote)});
+			background-image : url("${svgHref(svgCircleNote)}");
 		}`,
 
 		`:root.${galk.mediaIsFocused} .${galk.svCtrlBar} > .${galk.close} {
@@ -3952,21 +4018,21 @@ const getGlobalStyleRules = function(domain) {
 				}`,
 
 		`.${galk.focus} > .${galk.btnIcon} {
-			background-image : url(${svgHref(svgCircleFocus)});
+			background-image : url("${svgHref(svgCircleFocus)}");
 		}`,
 
 		`.${galk.prev}.${galk.ready} > .${galk.btnIcon} {
-			background-image : url(${svgCircleArrowLeftHref});
+			background-image : url("${svgCircleArrowLeftHref}");
 		}`,
 
 		`.${galk.next}.${galk.ready} > .${galk.btnIcon} {
-			background-image : url(${svgCircleArrowRightHref});
+			background-image : url("${svgCircleArrowRightHref}");
 		}`,
 
 		`.${galk.prev}.${galk.pending} > .${galk.btnIcon},
 		.${galk.next}.${galk.pending} > .${galk.btnIcon}
 		{
-			background-image : url(${svgHref(svgCircleSpinner)});
+			background-image : url("${svgHref(svgCircleSpinner)}");
 			${spinnerStyleRules}
 		}`,
 
@@ -3989,7 +4055,7 @@ const getGlobalStyleRules = function(domain) {
 			justify-content : center;
 			align-items : stretch;
 			position : absolute;
-			z-index : 32767; /* to ensure it covers type-badge on e621 */
+			z-index : 32767; /* ensure it covers type-badge on e621 (todo: obsolete) */
 			top : 0;
 			left : 0;
 			bottom : 0;
@@ -4024,7 +4090,7 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.thumbOverlay} > a.${galk.postPage} > .${galk.btnIcon} {
-			background-image : url(${svgHref(svgCircleLink)});
+			background-image : url("${svgHref(svgCircleLink)}");
 		}`,
 
 		`.${galk.thumbOverlay} > a.${galk.open} {
@@ -4032,26 +4098,26 @@ const getGlobalStyleRules = function(domain) {
 		}`,
 
 		`.${galk.thumbOverlay} > a.${galk.open} > .${galk.btnIcon} {
-			background-image : url(${svgCircleArrowDownHref});
+			background-image : url("${svgCircleArrowDownHref}");
 		}`,
 
 		`.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}
 			> .${galk.btnIcon}
 		{
-			background-image : url(${svgCircleArrowDownHref});
+			background-image : url("${svgCircleArrowDownHref}");
 		}`,
 
 		`.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}:hover
 			> .${galk.btnIcon}
 		{
-			background-image : url(${svgCircleArrowUpHref});
+			background-image : url("${svgCircleArrowUpHref}");
 		}`,
 
 		`:root.${galk.svLayoutState}-pending
 			.${galk.selected} > .${galk.thumbOverlay} > a.${galk.open}
 			> .${galk.btnIcon}
 		{
-			background-image : url(${svgHref(svgCircleSpinner)});
+			background-image : url("${svgHref(svgCircleSpinner)}");
 			${spinnerStyleRules}
 		}`,
 
@@ -4059,17 +4125,10 @@ const getGlobalStyleRules = function(domain) {
 			display : flex !important; /* thumbnails nested in <li> */
 		}`,
 
-		`:root.${galk.domainName}-e621 .${thumbClass} > .post-score {
-			margin-top : unset !important;
-			margin-bottom : unset !important;
-		}`,
-
-		/* fix type-badge position on e621: */
-		`:root.${galk.domainName}-e621 .${thumbClass} > a {
-			position : relative;
-		}`,
-		`:root.${galk.domainName}-e621 .${thumbClass} > a > .type-badge {
-			left : -12px;
+		/* ensure uniform thumbnail height: */
+		`:root.${galk.domainName}-e621 .${thumbClass} {
+			height : unset !important;
+			min-height : 154px;
 		}`,
 
 		/* --- animation --- */
@@ -4160,7 +4219,9 @@ const applyAnimatePulseOpacityClass = function(el) {
 /* --- assets --- */
 
 const svgHref = function(src) {
-	if (typeof Blob === `undefined`) {
+	if (typeof Blob === `undefined`
+		|| location.hostname === `e621.net`) // e621's csp interferes
+	{
 		return svgDataHref(src);
 	} else {
 		return svgBlobHref(src);};
