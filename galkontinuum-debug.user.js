@@ -2,7 +2,7 @@
 // @name		Galkontinuum
 // @namespace	6930e44863619d3f19806f68f74dbf62
 // @author		Bipface
-// @version		2020.03.06
+// @version		2020.04.26
 // @description	Enhanced browsing on Booru galleries
 // @homepageURL	.
 // @downloadURL	.
@@ -1238,8 +1238,8 @@ const bindSlideView = async function(state, doc, view) {
 			/* images can never be focused: */
 			toggleMediaIsFocused(doc, false);
 
-			if (false) {//info.sampleHref) {
-				// disabled for now as it interferes with the alpha-channel
+			if (info.sampleHref) {
+				// optionally disable this block as it interferes with the alpha-channel
 
 				updateMediaAttr(svEls.sampleElem, `src`, info.sampleHref);
 				svEls.sampleElem.hidden = false;
@@ -1268,8 +1268,8 @@ const bindSlideView = async function(state, doc, view) {
 					dispatchMediaViewingEvent(state, view, info.postId);};
 
 				svEls.thumbElem.classList.add(galk.animateToHidden);
-				//svEls.sampleElem.hidden = true;
-				//svEls.sampleElem.removeAttribute(`src`);
+				svEls.sampleElem.hidden = true;
+				svEls.sampleElem.removeAttribute(`src`);
 			};
 
 			if (svEls.imgElem.complete) {
@@ -3002,10 +3002,7 @@ const requestNavigatePostInfoUrl = function(
 			} else {
 				url.pathname = `/post/index.json`;};
 
-			if (domain.name !== `e621`) {
-				/* e612 has a slightly different result structure */
-				url.searchParams.set(`only`, danbooruApiPostFieldsSelector);};
-
+			url.searchParams.set(`only`, danbooruApiPostFieldsSelector);
 			url.searchParams.set(`limit`, `${navigatePostInfoRequPageLen}`);
 
 			let d = direction * idOrder; /* query direction */
@@ -3016,20 +3013,24 @@ const requestNavigatePostInfoUrl = function(
 						? `b${fromPostId}` /* before */
 						: `a${fromPostId}` /* after */);
 			} else {
-				if (expr !== null && expr.idTerms.length) {
-					/* danbooru can't evaluate multiple id: constraints */
-					log(`cannot create navigation request URL - search`
-						+` expression already contains an "id:" term`);
-					return null;};
-
-				if (d === -1) {
-					expr = {...expr,
-						idTerms : [`<${fromPostId}`],
-						orderTerm : `id_desc`,};
+				if (d === -1 && domain.subkind === `e621`) {// @@
+					url.searchParams.set(`before_id`, `${fromPostId}`);
 				} else {
-					expr = {...expr,
-						idTerms : [`>${fromPostId}`],
-						orderTerm : `id`,};
+					if (expr !== null && expr.idTerms.length) {
+						/* danb. can't evaluate multiple id: constraints */
+						log(`cannot create navigation request URL - search`
+							+` expression already contains an "id:" term`);
+						return null;};
+
+					if (d === -1) {
+						expr = {...expr,
+							idTerms : [`<${fromPostId}`],
+							orderTerm : `id_desc`,};
+					} else {
+						expr = {...expr,
+							idTerms : [`>${fromPostId}`],
+							orderTerm : `id`,};
+					};
 				};
 			};
 
